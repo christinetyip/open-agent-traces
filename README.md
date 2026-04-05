@@ -1,14 +1,15 @@
 # pi-share-hf
 
-Collect, review, and upload redacted [pi](https://github.com/badlogic/pi-mono) session files to a Hugging Face dataset.
+Collect, review, reject, and upload redacted [pi](https://github.com/badlogic/pi-mono) session files to a Hugging Face dataset.
 
 > **Sharing coding agent sessions risks leaking secrets and PII.** Read this README fully before use. Understand what gets redacted, what does not, and the assumptions in the [Limitations](#limitations) section.
 
 ## What it does
 
-1. `collect`: redacts secrets in pi session files for a `--cwd`, writes redacted JSONL and private reports
-2. `review`: sends redacted sessions to an LLM via `pi` for semantic review
-3. `upload`: uploads reviewed and approved sessions to a Hugging Face dataset
+1. `init`: create a workspace for one OSS project
+2. `collect`: redact sessions and run LLM review
+3. `reject`: manually exclude a session from upload
+4. `upload`: upload approved sessions to a Hugging Face dataset
 
 ## What gets redacted
 
@@ -19,9 +20,9 @@ Every string field in every JSON object is scanned:
 
 For maximum safety, pass known secrets explicitly with `--secret`. It accepts a file (one secret per line) or a literal string, and can be repeated.
 
-## What does not get redacted
+## What does not get redacted deterministically
 
-- **Embedded images**: preserved unchanged, marked `manual_review: true` in reports
+- **Embedded images**: preserved unchanged by default, or stripped with `init --no-images`
 - **Emails, names, non-standard secrets**: not caught deterministically, the LLM review step flags these
 
 ## Limitations
@@ -55,7 +56,7 @@ When logging in:
 - say **Y** when asked to add the token as a git credential (HF dataset repos are git-backed, uploads use git credentials)
 - do **not** set `HF_TOKEN` as an environment variable, it overrides the saved login and causes confusion when rotating tokens
 
-`review` needs `pi`:
+`collect` and `review` need `pi`:
 
 ```bash
 npm install -g @mariozechner/pi-coding-agent
@@ -65,117 +66,162 @@ The CLI checks at startup and prints install instructions if missing.
 
 ## Quick start
 
-Pick an OSS project you want to share sessions for. The workspace directory tracks what has been collected, redacted, reviewed, and uploaded. Keep it around to avoid redoing work when you upload new sessions later.
+Pick an OSS project you want to share regularly. Create one workspace and keep reusing it. The workspace tracks what has already been collected, reviewed, rejected, and uploaded, so you do not redo work.
 
 A good place for the workspace is inside your project directory, added to `.gitignore`:
 
 ```bash
 cd /path/to/my-project
-echo "pi-sessions/" >> .gitignore
+echo ".pi/hf-sessions/" >> .gitignore
 ```
 
-Create a small script so you don't have to remember the flags:
+Initialize the workspace once:
 
 ```bash
-#!/bin/bash
-# share-sessions.sh
-set -e
-pi-share-hf collect --cwd . --repo myuser/my-project-sessions --workspace pi-sessions \
-  --secret secrets.txt
-pi-share-hf review --workspace pi-sessions --parallel 4 \
+# personal account
+pi-share-hf init --repo myuser/my-project-sessions
+
+# organization or explicit namespace
+pi-share-hf init --repo my-project-sessions --organization myorg
+```
+
+Then collect + review:
+
+```bash
+pi-share-hf collect \
+  --secret secrets.txt \
   --provider openai-codex --model gpt-5.4 --thinking low \
+  --parallel 4 \
   --deny deny.txt \
   README.md AGENTS.md
-pi-share-hf upload --workspace pi-sessions
 ```
 
-Where `secrets.txt` has one secret per line (API keys, tokens, passwords) and `deny.txt` has one regex per line for topics that should never be shared (private project names, personal contacts, etc.).
-
-Review uses a lot of tokens. Each session chunk can be up to 100k tokens, and you are reviewing every session. Pick a model that balances cost and quality. `--parallel` controls concurrency.
-
-The positional arguments after the flags (`README.md AGENTS.md` above) are project context files. The review LLM reads these to understand what the project is about, so it can judge whether a session is related to the project or contains off-topic private work. Pass files that describe the project scope: `README.md`, `AGENTS.md`, design docs, contributing guides. The more context, the better the LLM can distinguish project work from unrelated activity.
-
-Run the first few rounds manually, step by step, so you can verify your secret and deny lists are catching everything. Check the review sidecars and use the [verification workflow](#verifying-results) to search for private keywords. Once you are confident the lists are complete, use the script for regular uploads:
+Optionally reject individual sessions after manual inspection:
 
 ```bash
-./share-sessions.sh
+pi-share-hf reject 2026-01-16T11-03-04-216Z_b8b30402-d134-4f0d-9e6e-e2f72ada5a2f.jsonl
+pi-share-hf reject .pi/hf-sessions/images/2026-01-20T02-11-25-504Z_147339a0-f4ca-4ec6-b420-670213ec3ec6_L2181_0_aa43d6a2d140.png
 ```
 
-Only new or changed sessions are processed. Already reviewed and uploaded sessions are skipped.
+Then upload approved sessions:
+
+```bash
+pi-share-hf upload
+```
+
+Defaults:
+- `--cwd`: current directory for `init`
+- `--workspace`: `.pi/hf-sessions` for all commands
+- context files for `collect` and `review`: `README.md` and `AGENTS.md` if present
+
+Where:
+- `secrets.txt` has one secret per line (API keys, tokens, passwords)
+- `deny.txt` has one regex per line for topics that should never be shared (private project names, personal contacts, etc.)
+- `README.md AGENTS.md ...` are project context files for the review LLM so it can tell project work from unrelated activity
+
+Review is token-heavy. Each session chunk can be up to 100k tokens, and large sessions produce multiple chunks. Pick a model that balances cost and quality.
+
+Run the first few rounds manually so you can verify your secret and deny lists are catching everything. Check the review sidecars and use the [verification workflow](#verifying-results) to search for private keywords. Once the setup looks good, put the commands in a project-local script and keep using the same workspace.
 
 ## Commands
+
+### `init`
+
+```bash
+pi-share-hf init [--cwd /path/to/project] --repo user/dataset [--workspace .pi/hf-sessions] [--no-images]
+pi-share-hf init [--cwd /path/to/project] --repo dataset-name --organization myorg [--workspace .pi/hf-sessions] [--no-images]
+```
+
+- `--cwd <dir>`: project directory to map to pi session storage (default: current directory)
+- `--repo <id>`: HF dataset repo id (`user/dataset`) or bare repo name when used with `--organization`
+- `--organization <name>`: optional HF organization or user namespace when `--repo` is a bare repo name
+- `--workspace <dir>`: persistent workspace directory (default: `.pi/hf-sessions`)
+- `--no-images`: strip embedded images from redacted output instead of preserving them
 
 ### `collect`
 
 ```bash
-pi-share-hf collect --cwd /path/to/project --repo user/dataset --workspace ./workspace
-pi-share-hf collect --cwd /path/to/project --repo user/dataset --workspace ./workspace \
-  --secret secrets.txt --secret "my-token"
+pi-share-hf collect [--workspace .pi/hf-sessions] \
+  --secret secrets.txt --secret "my-token" \
+  --provider openai-codex --model gpt-5.4 --thinking low \
+  --parallel 4 \
+  --deny deny.txt \
+  README.md AGENTS.md
 ```
 
 - `--env-file <path>`: secret source file (default: `~/.zshrc`)
 - `--secret <file>|<text>`: literal secret or secret file (repeatable)
-- `--repo <id>`: HF dataset repo, either `username/dataset` for personal accounts or `orgname/dataset` for organizations
 - `--force`: reprocess all sessions
-
-Skips sessions whose `source_hash` matches local workspace or remote manifest. Reprocessing removes stale review sidecars.
-
-### `review`
-
-```bash
-pi-share-hf review --workspace ./workspace [--provider anthropic] [--model claude-sonnet-4-5] \
-  [--parallel 4] [--deny deny.txt] [--deny "private-project|finances"] README.md AGENTS.md
-```
-
-- `--provider <name>`: pi provider override
+- `--provider <name>`: pi provider override for review
 - `--model <id>`: pi model override (supports `provider/model` shorthand)
+- `--thinking <level>`: thinking level override
 - `--parallel <n>`: concurrent LLM reviews (default: 1)
 - `--deny <file>|<regex>`: reject sessions matching this pattern without calling the LLM (repeatable)
-- positional args: project context files for relevance judgment
+- `--session <file>`: process a single session (for testing)
+- positional args: project context files for relevance judgment (defaults to `README.md` and `AGENTS.md` if present)
 
-LLM review is token-heavy. Each chunk can be up to 100k tokens, large sessions produce multiple chunks. Use a cost-effective model for bulk review.
+`collect` does both deterministic redaction and LLM review. It skips sessions whose `source_hash` matches local workspace or remote manifest. Reprocessing removes stale review sidecars.
 
 Sessions are serialized to plain-text transcripts, chunked, and attached to `pi` via `@file`. Existing review sidecars are reused when redacted hash, context hashes, provider, model, and prompt version all match.
 
-Output per session:
+If images are preserved, `collect` also extracts them to `workspace/images/` and tells you to inspect them manually. The review LLM receives those images too. If your chosen model does not support images, preserved images are not meaningfully reviewed.
 
+Output per session includes:
 - `about_project`: `yes` | `no` | `mixed`
 - `shareable`: `yes` | `no` | `manual_review`
 - `missed_sensitive_data`: `yes` | `no` | `maybe`
 - `flagged_parts`: `[{ reason, evidence }]`
 - `summary`
 
+### `review`
+
+`review` reruns the LLM step only on already-redacted sessions.
+
+```bash
+pi-share-hf review [--workspace .pi/hf-sessions] README.md AGENTS.md
+```
+
+It supports the same review-related flags as `collect`: `--provider`, `--model`, `--thinking`, `--parallel`, `--deny`, and `--session`.
+
+### `reject`
+
+```bash
+pi-share-hf reject [--workspace .pi/hf-sessions] <session.jsonl|image.png>
+```
+
+Adds the derived session filename to `workspace/reject.txt`. Upload always skips sessions listed there.
+
 ### `upload`
 
 ```bash
-pi-share-hf upload --workspace ./workspace [--dry-run]
+pi-share-hf upload [--workspace .pi/hf-sessions] [--dry-run]
 ```
 
 - `--dry-run`: print stats without uploading
 
-Repo is read from `workspace.json`. Requires review data for every session. Refuses to upload if any session has no review sidecar. Uploads only sessions where `shareable === "yes"`, `missed_sensitive_data === "no"`, and `about_project !== "no"`. Skips unchanged sessions.
+Repo is read from `workspace.json`. Requires review data for every session. Refuses to upload if any session has no review sidecar. Uploads only sessions where `shareable === "yes"`, `missed_sensitive_data === "no"`, and `about_project !== "no"`. Skips unchanged sessions and sessions listed in `reject.txt`.
 
 ## Verifying results
 
-After `review` completes, spot-check the results. Search the redacted sessions for keywords related to private topics you know appear in your sessions:
+After `collect` completes, spot-check the results. Search the redacted sessions for keywords related to private topics you know appear in your sessions:
 
 ```bash
 # find sessions containing a keyword
-rg -l 'my-private-project' workspace/redacted/
+rg -l 'my-private-project' .pi/hf-sessions/redacted/
 
 # check if those sessions are blocked
-for f in $(rg -l 'my-private-project' workspace/redacted/); do
+for f in $(rg -l 'my-private-project' .pi/hf-sessions/redacted/); do
   base=$(basename "$f")
-  python3 -c "import json; d=json.load(open('workspace/review/${base}.review.json')); a=d['aggregate']; print(a['shareable'], a['about_project'], base)"
+  python3 -c "import json; d=json.load(open('.pi/hf-sessions/review/${base}.review.json')); a=d['aggregate']; print(a['shareable'], a['about_project'], base)"
 done
 ```
 
-If any session containing private content is marked `shareable=yes`, add it to `--deny` and rerun `review`. Common things to search for: private project names, personal contacts, private infrastructure, financial references, non-OSS work topics.
+If any session containing private content is marked `shareable=yes`, add it to `--deny` and rerun `collect` or `review`. Common things to search for: private project names, personal contacts, private infrastructure, financial references, non-OSS work topics.
 
 ## Workspace layout
 
 ```text
-workspace/
+.pi/hf-sessions/
   workspace.json
   manifest.local.jsonl
   remote-manifest.jsonl
@@ -184,6 +230,8 @@ workspace/
   reports/        # private deterministic findings
   review/         # private LLM review sidecars
   review-chunks/  # private transcript chunks
+  images/         # extracted preserved images for manual inspection
+  reject.txt      # one rejected session filename per line
 ```
 
 Workspaces are incremental. Re-running `collect` or `review` reuses matching outputs.
