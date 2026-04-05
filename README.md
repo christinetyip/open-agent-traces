@@ -95,7 +95,7 @@ Review uses a lot of tokens. Each session chunk can be up to 100k tokens, and yo
 
 The positional arguments after the flags (`README.md AGENTS.md` above) are project context files. The review LLM reads these to understand what the project is about, so it can judge whether a session is related to the project or contains off-topic private work. Pass files that describe the project scope: `README.md`, `AGENTS.md`, design docs, contributing guides. The more context, the better the LLM can distinguish project work from unrelated activity.
 
-Run it whenever you want to share new sessions:
+Run the first few rounds manually, step by step, so you can verify your secret and deny lists are catching everything. Check the review sidecars and use the [verification workflow](#verifying-results) to search for private keywords. Once you are confident the lists are complete, use the script for regular uploads:
 
 ```bash
 ./share-sessions.sh
