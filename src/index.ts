@@ -1676,7 +1676,7 @@ async function ensureDatasetRepo(repo: string): Promise<void> {
 
 
 async function uploadFolder(repo: string, localDir: string): Promise<void> {
-  const result = await runCommand("huggingface-cli", [
+  const code = await runCommandPassthrough("huggingface-cli", [
     "upload",
     repo,
     localDir,
@@ -1686,9 +1686,20 @@ async function uploadFolder(repo: string, localDir: string): Promise<void> {
     "--commit-message",
     `pi-share-hf upload ${new Date().toISOString()}`,
   ]);
-  if (!result.ok) {
-    throw new Error(`Upload failed: ${result.stderr || result.stdout}`);
+  if (code !== 0) {
+    throw new Error(`Upload failed with exit code ${code}`);
   }
+}
+
+function runCommandPassthrough(command: string, args: string[]): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: "inherit",
+      env: process.env,
+    });
+    child.on("error", () => resolve(1));
+    child.on("close", (code) => resolve(code ?? 1));
+  });
 }
 
 async function ensureStartupTools(command: string): Promise<void> {
