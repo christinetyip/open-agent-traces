@@ -46,13 +46,16 @@ npm link
 `collect` and `upload` need `huggingface-cli`:
 
 ```bash
-python3 -m pip install --user "huggingface_hub[cli]"
+pip install "huggingface_hub[cli]"
 huggingface-cli login
 ```
 
+If `huggingface-cli` works but `python3 -c "from huggingface_hub import HfApi"` fails, your `pip` and `python3` point to different Python installations. Use `pip3` or the full path to the Python that `huggingface-cli` uses (check with `head -1 $(which huggingface-cli)`).
+
 When logging in:
-- create a token at https://huggingface.co/settings/tokens with **write** scope
+- create a token at https://huggingface.co/settings/tokens with **write** scope (Repositories > Write access)
 - say **Y** when asked to add the token as a git credential (HF dataset repos are git-backed, uploads use git credentials)
+- do **not** set `HF_TOKEN` as an environment variable, it overrides the saved login and causes confusion when rotating tokens
 
 `review` needs `pi`:
 
