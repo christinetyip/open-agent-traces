@@ -63,13 +63,35 @@ npm install -g @mariozechner/pi-coding-agent
 
 The CLI checks at startup and prints install instructions if missing.
 
-## Workflow
+## Quick start
+
+Pick an OSS project you want to share sessions for. The workspace directory tracks what has been collected, redacted, reviewed, and uploaded. Keep it around to avoid redoing work when you upload new sessions later.
+
+A good place for the workspace is inside your project directory, added to `.gitignore`:
 
 ```bash
-pi-share-hf collect --cwd /path/to/project --repo user/dataset --workspace ./workspace
-pi-share-hf review --workspace ./workspace README.md docs/design.md
-pi-share-hf upload --workspace ./workspace
+cd /path/to/my-project
+echo "pi-sessions/" >> .gitignore
 ```
+
+Create a small script so you don't have to remember the flags:
+
+```bash
+# share-sessions.sh
+#!/bin/bash
+set -e
+pi-share-hf collect --cwd . --repo myuser/my-project-sessions --workspace pi-sessions
+pi-share-hf review --workspace pi-sessions --parallel 4 README.md AGENTS.md
+pi-share-hf upload --workspace pi-sessions
+```
+
+Run it whenever you want to share new sessions:
+
+```bash
+./share-sessions.sh
+```
+
+Only new or changed sessions are processed. Already reviewed and uploaded sessions are skipped.
 
 ## Commands
 
