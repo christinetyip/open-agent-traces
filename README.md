@@ -1,4 +1,4 @@
-# pi-share
+# pi-share-hf
 
 Collect, review, and upload redacted [pi](https://github.com/badlogic/pi-mono) session files to a Hugging Face dataset.
 
