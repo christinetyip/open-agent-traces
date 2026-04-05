@@ -77,13 +77,18 @@ echo "pi-sessions/" >> .gitignore
 Create a small script so you don't have to remember the flags:
 
 ```bash
-# share-sessions.sh
 #!/bin/bash
+# share-sessions.sh
 set -e
-pi-share-hf collect --cwd . --repo myuser/my-project-sessions --workspace pi-sessions
-pi-share-hf review --workspace pi-sessions --parallel 4 README.md AGENTS.md
+pi-share-hf collect --cwd . --repo myuser/my-project-sessions --workspace pi-sessions \
+  --secret secrets.txt
+pi-share-hf review --workspace pi-sessions --parallel 4 \
+  --deny deny.txt \
+  README.md AGENTS.md
 pi-share-hf upload --workspace pi-sessions
 ```
+
+Where `secrets.txt` has one secret per line (API keys, tokens, passwords) and `deny.txt` has one regex per line for topics that should never be shared (private project names, personal contacts, etc.).
 
 Run it whenever you want to share new sessions:
 
