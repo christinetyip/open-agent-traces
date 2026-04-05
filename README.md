@@ -66,9 +66,9 @@ The CLI checks at startup and prints install instructions if missing.
 ## Workflow
 
 ```bash
-pi-share collect --cwd /path/to/project --repo user/dataset --workspace ./workspace
-pi-share review --workspace ./workspace README.md docs/design.md
-pi-share upload --workspace ./workspace
+pi-share-hf collect --cwd /path/to/project --repo user/dataset --workspace ./workspace
+pi-share-hf review --workspace ./workspace README.md docs/design.md
+pi-share-hf upload --workspace ./workspace
 ```
 
 ## Commands
@@ -76,8 +76,8 @@ pi-share upload --workspace ./workspace
 ### `collect`
 
 ```bash
-pi-share collect --cwd /path/to/project --repo user/dataset --workspace ./workspace
-pi-share collect --cwd /path/to/project --repo user/dataset --workspace ./workspace \
+pi-share-hf collect --cwd /path/to/project --repo user/dataset --workspace ./workspace
+pi-share-hf collect --cwd /path/to/project --repo user/dataset --workspace ./workspace \
   --secret secrets.txt --secret "my-token"
 ```
 
@@ -90,7 +90,7 @@ Skips sessions whose `source_hash` matches local workspace or remote manifest. R
 ### `review`
 
 ```bash
-pi-share review --workspace ./workspace [--provider anthropic] [--model claude-sonnet-4-5] \
+pi-share-hf review --workspace ./workspace [--provider anthropic] [--model claude-sonnet-4-5] \
   [--parallel 4] [--deny deny.txt] [--deny "private-project|finances"] README.md AGENTS.md
 ```
 
@@ -115,7 +115,7 @@ Output per session:
 ### `upload`
 
 ```bash
-pi-share upload --workspace ./workspace [--dry-run]
+pi-share-hf upload --workspace ./workspace [--dry-run]
 ```
 
 - `--dry-run`: print stats without uploading

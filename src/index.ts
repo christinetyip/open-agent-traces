@@ -144,12 +144,12 @@ const SECRET_PATTERNS: SecretPattern[] = [
 
 function printUsage(): void {
   console.log(`
-pi-share
+pi-share-hf
 
 Usage:
-  pi-share collect --cwd <dir> --repo <hf-dataset-repo> --workspace <dir> [options]
-  pi-share review --workspace <dir> <context-file>+
-  pi-share upload --repo <hf-dataset-repo> --workspace <dir>
+  pi-share-hf collect --cwd <dir> --repo <hf-dataset-repo> --workspace <dir> [options]
+  pi-share-hf review --workspace <dir> <context-file>+
+  pi-share-hf upload --workspace <dir>
 
 Commands:
   collect   Redact new or changed sessions for a cwd into a workspace
