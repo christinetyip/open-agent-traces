@@ -90,6 +90,8 @@ pi-share-hf upload --workspace pi-sessions
 
 Where `secrets.txt` has one secret per line (API keys, tokens, passwords) and `deny.txt` has one regex per line for topics that should never be shared (private project names, personal contacts, etc.).
 
+The positional arguments after the flags (`README.md AGENTS.md` above) are project context files. The review LLM reads these to understand what the project is about, so it can judge whether a session is related to the project or contains off-topic private work. Pass files that describe the project scope: `README.md`, `AGENTS.md`, design docs, contributing guides. The more context, the better the LLM can distinguish project work from unrelated activity.
+
 Run it whenever you want to share new sessions:
 
 ```bash
