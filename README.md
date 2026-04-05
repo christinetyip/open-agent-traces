@@ -115,6 +115,7 @@ pi-share-hf collect --cwd /path/to/project --repo user/dataset --workspace ./wor
 
 - `--env-file <path>`: secret source file (default: `~/.zshrc`)
 - `--secret <file>|<text>`: literal secret or secret file (repeatable)
+- `--repo <id>`: HF dataset repo, either `username/dataset` for personal accounts or `orgname/dataset` for organizations
 - `--force`: reprocess all sessions
 
 Skips sessions whose `source_hash` matches local workspace or remote manifest. Reprocessing removes stale review sidecars.

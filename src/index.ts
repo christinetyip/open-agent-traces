@@ -1596,8 +1596,6 @@ async function runUpload(options: UploadOptions): Promise<void> {
     return;
   }
 
-  await ensureDatasetRepo(repo);
-
   // Stage approved files into a temporary upload directory so we can upload
   // everything in a single commit instead of one commit per file.
   const uploadDir = workspacePath(options.workspace, "_upload_staging");
@@ -1653,26 +1651,6 @@ function isUploadApproved(result: ChunkReviewResult): boolean {
   return true;
 }
 
-async function ensureDatasetRepo(repo: string): Promise<void> {
-  // huggingface-cli repo create expects just the repo name, with --organization
-  // for namespaced repos. For personal accounts (user/repo), pass just the name.
-  const slash = repo.indexOf("/");
-  const name = slash === -1 ? repo : repo.slice(slash + 1);
-  const owner = slash === -1 ? undefined : repo.slice(0, slash);
-
-  const args = ["repo", "create", name, "--type", "dataset", "-y"];
-  if (owner) args.splice(4, 0, "--organization", owner);
-
-  const result = await runCommand("huggingface-cli", args);
-  if (!result.ok) {
-    const text = `${result.stdout}\n${result.stderr}`;
-    if (text.includes("already exists") || text.includes("You already created") || text.includes("409")) {
-      return;
-    }
-    // If creation failed for another reason, the first upload will fail with
-    // a clear error, so we do not throw here.
-  }
-}
 
 
 async function uploadFolder(repo: string, localDir: string): Promise<void> {
