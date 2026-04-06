@@ -94,7 +94,7 @@ Then collect + review:
 ```bash
 pi-share-hf collect \
   --secret secrets.txt \
-  --provider openai-codex --model gpt-5.4 --thinking low \
+  --provider openai-codex --model gpt-5.4 --thinking medium \
   --parallel 4 \
   --deny deny.txt \
   README.md AGENTS.md
@@ -147,7 +147,7 @@ pi-share-hf init [--cwd /path/to/project] --repo dataset-name --organization myo
 ```bash
 pi-share-hf collect [--workspace .pi/hf-sessions] \
   --secret secrets.txt --secret "my-token" \
-  --provider openai-codex --model gpt-5.4 --thinking low \
+  --provider openai-codex --model gpt-5.4 --thinking medium \
   --parallel 4 \
   --deny deny.txt \
   README.md AGENTS.md
@@ -260,20 +260,15 @@ Repo is read from `workspace.json`. Requires review data for every session. Refu
 
 ## Verifying results
 
-After `collect` completes, spot-check the results. Search the redacted sessions for keywords related to private topics you know appear in your sessions:
+After `collect` completes, spot-check the results. `list --uploadable` prints the exact session files that would be uploaded. `grep` runs `rg` only against that uploadable set.
 
 ```bash
-# find sessions containing a keyword
-rg -l 'my-private-project' .pi/hf-sessions/redacted/
-
-# check if those sessions are blocked
-for f in $(rg -l 'my-private-project' .pi/hf-sessions/redacted/); do
-  base=$(basename "$f")
-  python3 -c "import json; d=json.load(open('.pi/hf-sessions/review/${base}.review.json')); a=d['aggregate']; print(a['shareable'], a['about_project'], base)"
-done
+pi-share-hf list --uploadable
+pi-share-hf grep 'my-private-project'
+pi-share-hf grep -i 'finance|agreement|royalt'
 ```
 
-If any session containing private content is marked `shareable=yes`, add it to `--deny` and rerun `collect` or `review`. Common things to search for: private project names, personal contacts, private infrastructure, financial references, non-OSS work topics.
+If any session containing private content is still uploadable, add a deny pattern and rerun `collect` or `review`, or reject the session explicitly with `pi-share-hf reject`.
 
 ## Workspace layout
 
@@ -301,7 +296,7 @@ Workspaces are incremental. Re-running `collect` or `review` reuses matching out
   ```
 - `manifest.local.jsonl`: one line per locally known session
   ```json
-  {"file":"2026-04-04T16-43-06-494Z_....jsonl","source_file":"/abs/path/to/session.jsonl","source_hash":"sha256:...","redacted_hash":"sha256:...","entry_count":123,"findings":7,"lines_with_findings":5}
+  {"file":"2026-04-04T16-43-06-494Z_....jsonl","source_file":"/abs/path/to/session.jsonl","source_hash":"sha256:...","redaction_key":"v1:...","redacted_hash":"sha256:...","entry_count":123,"findings":7,"lines_with_findings":5}
   ```
 - `remote-manifest.jsonl`: cached copy of the remote dataset manifest
 - `reports/<session>.report.jsonl`: deterministic findings, one line per original JSONL line with findings
@@ -327,8 +322,10 @@ Each `<session>.jsonl` is a redacted pi session. See the [session format docs](h
 `manifest.jsonl` has one entry per session:
 
 ```json
-{"file": "2026-04-04T16-43-06-494Z_aed55f07.jsonl", "source_hash": "sha256:...", "redacted_hash": "sha256:..."}
+{"file": "2026-04-04T16-43-06-494Z_aed55f07.jsonl", "source_hash": "sha256:...", "redaction_key": "v1:...", "redacted_hash": "sha256:..."}
 ```
+
+`redaction_key` is a cache key derived from the source hash, image policy, and a hash of the provided secrets. Raw secret values are never written to disk.
 
 ## Development
 
