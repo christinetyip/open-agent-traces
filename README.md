@@ -66,7 +66,11 @@ The CLI checks at startup and prints install instructions if missing.
 
 ## Quick start
 
-Pick an OSS project you want to share regularly. Create one workspace and keep reusing it. The workspace tracks what has already been collected, reviewed, rejected, and uploaded, so you do not redo work.
+Pick one OSS project you want to share regularly. Create one workspace and keep reusing it. The workspace tracks what has already been collected, reviewed, rejected, and uploaded, so you do not redo work.
+
+Preferred setup: one Hugging Face dataset repo per OSS project.
+
+It is fine to use multiple machines for the same OSS project and point them at the same dataset repo. It is not recommended to mix traces from different OSS projects into one dataset repo, because the generated dataset card and review context are project-specific.
 
 A good place for the workspace is inside your project directory, added to `.gitignore`:
 

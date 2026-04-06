@@ -3,7 +3,7 @@ import path from "node:path";
 import { bold, cyan, green, red, yellow } from "./colors.ts";
 import type { ChunkReviewResult, RemoteManifestEntry, UploadOptions } from "./types.ts";
 import { REJECT_FILE, REMOTE_MANIFEST_CACHE_FILE, REMOTE_MANIFEST_FILE } from "./types.ts";
-import { runCommandPassthrough } from "./process.ts";
+import { runCommand, runCommandPassthrough } from "./process.ts";
 import { loadReviewFile } from "./review-state.ts";
 import { downloadRemoteManifest, loadLocalManifest, readWorkspaceConfig, workspacePath } from "./workspace.ts";
 
@@ -119,6 +119,7 @@ export async function runUpload(options: UploadOptions): Promise<void> {
     .map((entry) => JSON.stringify(entry))
     .join("\n");
   fs.writeFileSync(path.join(uploadDir, REMOTE_MANIFEST_FILE), manifestContents.length > 0 ? `${manifestContents}\n` : "");
+  fs.writeFileSync(path.join(uploadDir, "README.md"), await generateDatasetCard(config.cwd, repo, entries.length, approved, rejected + rejectedManual, unchanged));
 
   console.log(`${bold("Staged for upload:")} ${cyan(String(staged))}`);
   console.log(green("Uploading..."));
@@ -130,6 +131,63 @@ export async function runUpload(options: UploadOptions): Promise<void> {
 
   console.log(`${bold("Uploaded:")} ${green(String(staged))}`);
   console.log(`${bold("Updated remote manifest:")} ${REMOTE_MANIFEST_FILE}`);
+}
+
+async function generateDatasetCard(
+  cwd: string,
+  repo: string,
+  totalSessions: number,
+  approved: number,
+  blocked: number,
+  unchanged: number,
+): Promise<string> {
+  const sourceRepo = await resolveGitOrigin(cwd);
+  const lines = [
+    "---",
+    "pretty_name: coding agent session traces",
+    "task_categories:",
+    "- text-generation",
+    "language:",
+    "- en",
+    "license: other",
+    "---",
+    "",
+    `# Coding agent session traces for ${repo}`,
+    "",
+    sourceRepo
+      ? `This dataset contains redacted coding agent session traces collected while working on ${sourceRepo}. The traces were exported with [pi-share-hf](https://github.com/badlogic/pi-share-hf) from a local [pi](https://pi.dev) workspace and filtered to keep only sessions that passed deterministic redaction and LLM review.`
+      : `This dataset contains redacted coding agent session traces exported with [pi-share-hf](https://github.com/badlogic/pi-share-hf) from a local [pi](https://pi.dev) workspace. The traces were filtered to keep only sessions that passed deterministic redaction and LLM review.`,
+    "",
+    "## Data description",
+    "",
+    "Each `*.jsonl` file is a redacted pi session. Sessions are stored as JSON Lines files where each line is a structured session entry. Entries include session headers, user and assistant messages, tool results, model changes, thinking level changes, compaction summaries, branch summaries, and custom extension data.",
+    "",
+    "Pi session files are tree-structured via `id` and `parentId`, so a single session file may contain multiple branches of work. See the upstream session format documentation for the exact schema:",
+    "",
+    "- https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session.md",
+    "",
+    sourceRepo ? `Source git repo: ${sourceRepo}` : "Source git repo: (not detected)",
+    "",
+    "## Redaction and review",
+    "",
+    "The data was processed with [pi-share-hf](https://github.com/badlogic/pi-share-hf) using deterministic secret redaction plus an LLM review step. Deterministic redaction targets exact known secrets and curated credential patterns. The LLM review decides whether a session is about the OSS project, whether it is fit to share publicly, and whether any sensitive content appears to have been missed.",
+    "",
+    "Embedded images may be preserved in the uploaded sessions unless the workspace was initialized with `--no-images`.",
+    "",
+    "## Limitations",
+    "",
+    "This dataset is best-effort redacted. Coding agent transcripts can still contain sensitive or off-topic content, especially if a session mixed OSS work with unrelated private tasks. Use with appropriate caution.",
+    "",
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+async function resolveGitOrigin(cwd: string): Promise<string | undefined> {
+  const inside = await runCommand("git", ["-C", cwd, "rev-parse", "--is-inside-work-tree"]);
+  if (!inside.ok || inside.stdout.trim() !== "true") return undefined;
+  const origin = await runCommand("git", ["-C", cwd, "remote", "get-url", "origin"]);
+  if (!origin.ok) return undefined;
+  return origin.stdout.trim() || undefined;
 }
 
 function isUploadApproved(result: ChunkReviewResult): boolean {

@@ -134,6 +134,8 @@ export function parseLocalManifestEntry(value: unknown): LocalManifestEntry | un
 export async function downloadRemoteManifest(repo: string, outputPath: string): Promise<Map<string, RemoteManifestEntry>> {
   fs.rmSync(outputPath, { force: true });
   const downloadDir = path.dirname(outputPath);
+  const downloadedPath = path.join(downloadDir, REMOTE_MANIFEST_FILE);
+  fs.rmSync(downloadedPath, { force: true });
   fs.mkdirSync(downloadDir, { recursive: true });
 
   const result = await runCommand("huggingface-cli", [
@@ -149,9 +151,10 @@ export async function downloadRemoteManifest(repo: string, outputPath: string): 
     "--quiet",
   ]);
 
-  if (!result.ok || !fs.existsSync(outputPath)) {
+  if (!result.ok || !fs.existsSync(downloadedPath)) {
     return new Map();
   }
 
+  fs.copyFileSync(downloadedPath, outputPath);
   return loadRemoteManifest(outputPath);
 }
