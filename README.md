@@ -2,6 +2,11 @@
 
 Collect, review, reject, and upload redacted [pi](https://github.com/badlogic/pi-mono) session files to a Hugging Face dataset.
 
+Generated dataset cards include the tags `agent-traces`, `coding-agent`, and `pi-share-hf`, so datasets created by this tool can be found via Hugging Face dataset search and filters, for example:
+- https://huggingface.co/datasets?other=agent-traces
+- https://huggingface.co/datasets?other=coding-agent
+- https://huggingface.co/datasets?other=pi-share-hf
+
 > **Sharing coding agent sessions risks leaking secrets and PII.** Read this README fully before use. Understand what gets redacted, what does not, and the assumptions in the [Limitations](#limitations) section.
 
 ## What it does

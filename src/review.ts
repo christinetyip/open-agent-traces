@@ -247,6 +247,8 @@ export async function runReview(options: ReviewOptions): Promise<void> {
   console.log(`  ${bold("Blocked:")} ${red(String(summary.blocked))}`);
   console.log(`  ${bold("Review sidecars:")} ${workspacePath(options.workspace, "review")}`);
 
+  writeDeniedReport(options.workspace, sessionFiles);
+
   if (hasImages) {
     const imagesDir = workspacePath(options.workspace, "images");
     const imageCount = fs.existsSync(imagesDir) ? fs.readdirSync(imagesDir).length : 0;
@@ -259,6 +261,8 @@ export async function runReview(options: ReviewOptions): Promise<void> {
     }
   }
 
+  console.log(`  ${bold("Denied report:")} ${workspacePath(options.workspace, "denied.md")}`);
+
   console.log();
   console.log(bold("Next step"));
   if (summary.uploadable > 0) {
@@ -266,6 +270,46 @@ export async function runReview(options: ReviewOptions): Promise<void> {
   } else {
     console.log(`  ${yellow("No uploadable sessions.")}`);
   }
+}
+
+function writeDeniedReport(workspace: string, sessionFiles: string[]): void {
+  const reportPath = workspacePath(workspace, "denied.md");
+  const lines: string[] = ["# Denied sessions", ""];
+
+  for (const file of sessionFiles) {
+    const review = loadReviewFile(workspacePath(workspace, "review", `${file}.review.json`));
+    if (!review) continue;
+    const aggregate = review.aggregate;
+    const uploadable = aggregate.shareable === "yes" && aggregate.missed_sensitive_data === "no" && aggregate.about_project !== "no";
+    if (uploadable) continue;
+
+    lines.push(`## ${file}`);
+    lines.push("");
+
+    const deterministicReason = aggregate.flagged_parts.find((part) => part.reason === "deterministic-secret-redaction" || part.reason === "deny-pattern");
+    if (deterministicReason) {
+      if (deterministicReason.reason === "deterministic-secret-redaction") {
+        lines.push("Reason: `--secret` / `--env-file` / token pattern redaction triggered.");
+      } else {
+        lines.push(`Reason: \`--deny\` matched \`${deterministicReason.evidence}\`.`);
+      }
+      lines.push("");
+      continue;
+    }
+
+    const chunkSummaries = review.chunks
+      .flatMap((chunk) => (chunk.result?.summary ? [chunk.result.summary] : []))
+      .filter(Boolean);
+
+    if (chunkSummaries.length > 0) {
+      lines.push(...chunkSummaries.map((summary) => `- ${summary}`));
+    } else {
+      lines.push(`- ${aggregate.summary}`);
+    }
+    lines.push("");
+  }
+
+  fs.writeFileSync(reportPath, `${lines.join("\n")}\n`);
 }
 
 function syncApprovedImages(workspace: string, sessionFiles: string[]): void {
