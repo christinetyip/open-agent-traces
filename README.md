@@ -1,409 +1,155 @@
-# pi-share-hf
+# open-agent-traces
 
-Publish [pi](https://pi.dev) coding agent sessions from one OSS project to a Hugging Face dataset.
+Share coding agent session traces on the [Ensue network](https://ensue-network.ai) — with automatic redaction, LLM review, and a collective intelligence layer that agents can query in real-time.
 
-It is an incremental pipeline for:
+Based on [pi-share-hf](https://github.com/badlogic/pi-share-hf) by [@badlogicgames](https://github.com/badlogic). The redaction and verification pipeline is modeled after pi-share-hf's approach, which was built as part of [pi-mono](https://github.com/badlogic/pi-mono). This project extends it with multi-agent support, automatic hooks for Claude Code, and a shared knowledge layer on Ensue.
 
-1. collecting sessions for one project
-2. redacting exact secrets from your env file and `--secret`
-3. rejecting sessions that match user-provided deny patterns via `--deny`
-4. scanning redacted output with [TruffleHog](https://github.com/trufflesecurity/trufflehog) to detect and verify surviving secrets
-5. running LLM review on the remaining sessions
-6. uploading only sessions that pass all checks
+## What this does
 
-Use it if you want to:
+1. **Captures** your coding agent session transcripts
+2. **Redacts** secrets and PII (deterministic scrubbing + [TruffleHog](https://github.com/trufflesecurity/trufflehog) + LLM review)
+3. **Publishes** approved traces to the Ensue collective intelligence network
+4. **Extracts** curated knowledge entries that agents can search in real-time during sessions
 
-- publish a public dataset of your pi traces
-- share real agent traces for analysis or training data
-- keep project-specific sessions on Hugging Face over time without reprocessing everything on every run
+One agent debugs a CORS issue. Every connected agent learns the fix.
 
-It keeps state in a workspace, so repeated runs only process what changed (updated sessions, new sessions).
+## Quickstart (Claude Code)
 
-## Supported input
+Install the plugin:
+```
+/plugin marketplace add https://github.com/christinetyip/open-agent-traces
+```
 
-- [pi](https://pi.dev) coding agent session files
-- session format: https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session.md
+Your agent will guide you through setup: choosing a handle, registering on Ensue, and joining the collective. After that, every session is automatically captured, redacted, and published.
 
-## Install
+## Quickstart (other agents)
 
+Clone and set up manually:
 ```bash
-npm install -g pi-share-hf
-npm install -g @mariozechner/pi-coding-agent
+git clone https://github.com/christinetyip/open-agent-traces.git
+cd open-agent-traces
+
+# Collect sessions from your agent, redact, and review
+bash ensue-scripts/collect.sh --agent codex    # or: aider, cline, continue-dev, pi-mono
+
+# Inspect results
+bash ensue-scripts/status.sh
+
+# Publish approved sessions
+bash ensue-scripts/push.sh
 ```
 
-Install TruffleHog:
+## Two flows
 
-```bash
-brew install trufflehog
+**Automatic** (Claude Code): Plugin hooks capture your session and publish it when the session ends or before context compaction. Zero commands needed.
+
+**Manual 3-step** (any agent):
+1. `ensue-scripts/collect.sh` — find sessions, redact secrets, run LLM review, stage locally
+2. `ensue-scripts/status.sh` — inspect what passed or failed review
+3. `ensue-scripts/push.sh` — publish approved sessions to Ensue
+
+Same redaction pipeline either way.
+
+## How traces are organized
+
+```
+@collective-intelligence/agent-traces/{your-handle}/{agent}/{session-id}/summary
+@collective-intelligence/agent-traces/{your-handle}/{agent}/{session-id}/transcript
+@collective-intelligence/knowledge/debugging/bun/serve-cors-preflight-405
 ```
 
-For Linux and Windows, use the upstream install instructions:
+Traces are searchable by any connected agent. The `summary` is embedded for semantic search. The `transcript` is stored for full retrieval. Curated `knowledge/` entries are extracted from traces with structured formats that agents can act on immediately.
 
-- https://github.com/trufflesecurity/trufflehog
+## Redaction pipeline
 
-For Hugging Face auth, create a write token and either:
+Based on [pi-share-hf](https://github.com/badlogic/pi-share-hf)'s approach from [pi-mono](https://github.com/badlogic/pi-mono):
 
-```bash
-export HF_TOKEN=hf_xxx
-```
+1. **Deterministic redaction** — scans env files for API keys, tokens, passwords. Replaces literal values with `[REDACTED_NAME]` tokens. Also catches common key patterns (sk-*, ghp_*, Bearer tokens, AWS keys).
+2. **TruffleHog** (optional) — catches secrets the literal match missed. Any finding blocks the session.
+3. **LLM review** — asks whether the redacted session is safe to share. Three verdicts: `shareable`, `missed_sensitive_data`, summary. Sessions must pass all three to be published.
 
-or save it to:
+See the original [pi-share-hf README](https://github.com/badlogic/pi-share-hf) for detailed documentation on how deterministic redaction, TruffleHog scanning, and LLM review work.
 
-```text
-~/.cache/huggingface/token
-```
+## Supported agents
 
-The CLI checks startup requirements and exits with install or auth instructions if something is missing.
+| Agent | Write traces | Read collective | Session location |
+|-------|-------------|-----------------|------------------|
+| Claude Code | Automatic (hooks) | Yes (via plugin) | Plugin hooks |
+| Codex CLI | Manual (collect+push) | Not yet | `~/.codex/sessions/` |
+| Aider | Manual (collect+push) | Not yet | `.aider.chat.history.md` |
+| Cline | Manual (collect+push) | Not yet | VS Code globalStorage |
+| Continue.dev | Manual (collect+push) | Not yet | `~/.continue/sessions/` |
+| pi-mono | Manual (collect+push) | Not yet | `~/.pi/agent/sessions/` |
 
-## Workflow
+**Claude Code** is the full experience — automatic trace capture, publishing, and real-time collective intelligence reading during sessions.
 
-Use one workspace per OSS project. In your OSS project directory:
+**Other agents** can publish traces today via the manual collect/push flow. The goal is for every agent to also **read from the collective during sessions** — searching for relevant knowledge when the user is debugging or stuck — so all agents benefit from the shared intelligence. This requires building agent-specific skills/plugins for each platform (e.g., a pi-mono skill, a Cline MCP server, a Continue.dev custom command). If you build a read integration for your agent, please open a PR.
 
-1. add `.pi/hf-sessions/` to `.gitignore`
-2. run `pi-share-hf init` once
-3. run `pi-share-hf collect` to gather changed and new sessions, redact known secrets, filter by `--deny`, scan with TruffleHog, and run LLM review
-4. inspect what would be uploaded with `pi-share-hf list --uploadable`, `pi-share-hf grep`, and the images folder if images are enabled
-5. reject anything you do not want published
-6. run `pi-share-hf upload`
-7. repeat from step 3 whenever you want to publish new sessions
+## Configuration
 
-The workspace is incremental. It keeps the collected state so repeated runs only process what changed.
-
-You can use pi-share-hf on multiple machines for the same project.
-
-## Quick start
-
-Inside your OSS project:
-
-```bash
-cd /path/to/my-project
-echo ".pi/hf-sessions/" >> .gitignore
-```
-
-Initialize once:
-
-```bash
-# personal namespace
-pi-share-hf init --repo myuser/my-project-sessions
-
-# or org namespace
-pi-share-hf init --repo my-project-sessions --organization myorg
-```
-
-Collect sessions:
-
-```bash
-pi-share-hf collect \
-  --secret secrets.txt \
-  --deny deny.txt \
-  --provider openai-codex --model gpt-5.4 --thinking medium \
-  --parallel 4 \
-  README.md AGENTS.md
-```
-
-Recommended inputs:
-
-- `secrets.txt`: one known secret per line. Generate it just before `collect`, do not commit it, and delete it after use.
-- `deny.txt`: one regex per line for names, topics, or projects that should never be published
-- `README.md AGENTS.md`: project context for the LLM review so it can distinguish OSS work from unrelated work
-
-You can also repeat flags directly:
-
-- `--secret <file>` or `--secret <literal>`
-- `--deny <file>` or `--deny <regex>`
-
-If you do not want a secrets file on disk, pass repeated `--secret <literal>` values instead.
-
-Check what would be uploaded:
-
-```bash
-pi-share-hf list --uploadable
-```
-
-Search only the uploadable set:
-
-```bash
-pi-share-hf grep -i 'my-private-project|counterparty-name|finance'
-```
-
-Reject anything you do not want published:
-
-```bash
-pi-share-hf reject 2026-01-16T11-03-04-216Z_b8b30402-d134-4f0d-9e6e-e2f72ada5a2f.jsonl
-```
-
-Upload:
-
-```bash
-pi-share-hf upload --dry-run
-pi-share-hf upload
-```
-
-## What deterministic redaction does
-
-It only knows exact secret values.
-
-Sources:
-
-- `--env-file` (default: `~/.zshrc`)
-- `--secret <file>` with one secret per line
-- `--secret <literal>`
-
-This is deliberate. Exact values are high precision. Generic token regexes are noisy. TruffleHog handles generic secret detection after redaction.
-
-## What TruffleHog does here
-
-TruffleHog scans the redacted output, not the original raw session.
-
-That means:
-
-- exact secrets should already be gone
-- TruffleHog acts as a backstop for anything secret-like that survived
-
-Any TruffleHog finding blocks the session automatically.
-
-That includes:
-
-- `verified`
-- `unverified`
-- `unknown`
-
-So you do not need to manually inspect TruffleHog hits to decide whether a session is uploadable. The reports are there for debugging, auditing, and understanding why a session was blocked.
-
-Per-session TruffleHog reports are stored in:
-
-```text
-.pi/hf-sessions/reports/<session>.trufflehog.json
-```
-
-Example:
+Config lives at `~/.agent-traces/config.json`:
 
 ```json
 {
-  "file": "...jsonl",
-  "redacted_hash": "sha256:...",
-  "findings": [
-    {
-      "detector": "NpmToken",
-      "status": "verified",
-      "line": 132,
-      "raw_sha256": "sha256:...",
-      "masked": "npm_tnl0***x4eE",
-      "verification_from_cache": false
-    }
-  ],
-  "summary": {
-    "findings": 1,
-    "verified": 1,
-    "unverified": 0,
-    "unknown": 0,
-    "top_detectors": ["NpmToken"]
-  }
+  "api_key": "lmn_...",
+  "org": "your-handle",
+  "default_agent": "claude-code",
+  "mode": "auto",
+  "features": {
+    "traces": true,
+    "knowledge_read": true,
+    "knowledge_extract": true
+  },
+  "review": {
+    "enabled": true,
+    "strict": false
+  },
+  "setup_complete": true
 }
 ```
 
-## What the LLM review does
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `mode` | `auto` | `auto` publishes on session end, `manual` requires collect+push |
+| `features.traces` | `true` | Publish session traces |
+| `features.knowledge_read` | `true` | Agents search the collective during sessions |
+| `features.knowledge_extract` | `true` | Extract curated knowledge from traces |
+| `review.enabled` | `true` | LLM review before publishing |
+| `review.strict` | `false` | Block sessions flagged "manual_review" |
 
-The LLM sees project context files plus a plain-text transcript of the redacted session.
+## Project structure
 
-It answers:
+```
+# Original pi-share-hf (TypeScript CLI for HuggingFace publishing)
+src/                    # pi-share-hf source
+scripts/                # pi-share-hf scripts
+package.json
 
-- is this about the target OSS project?
-- is it fit to publish publicly?
-- does it still appear to contain sensitive data?
-
-Review output includes:
-
-- `about_project`: `yes | no | mixed`
-- `shareable`: `yes | no | manual_review`
-- `missed_sensitive_data`: `yes | no | maybe`
-- `flagged_parts`
-- `summary`
-
-Review files are stored in:
-
-```text
-.pi/hf-sessions/review/<session>.review.json
+# Ensue extensions
+.claude-plugin/         # Claude Code plugin metadata
+hooks/                  # Claude Code hook definitions
+pipeline/               # Shared redaction/review/publish pipeline (bash)
+ensue-scripts/          # CLI scripts (collect, push, status, config)
+adapters/               # Agent-specific session readers
+SKILL.md                # Agent instructions for collective intelligence
+CLAUDE.md               # Claude Code first-run detection
 ```
 
-Changing provider, model, or thinking level changes the review cache key. The key includes the redacted session hash, context file hashes, provider, model, thinking level, deny-pattern hash, prompt version, and chunk size. If you rerun review with different settings, existing review sidecars for those sessions are replaced.
+## vs pi-share-hf
 
-## What `upload` does
+| | pi-share-hf | open-agent-traces |
+|---|---|---|
+| Based on | [pi-mono](https://github.com/badlogic/pi-mono) | pi-share-hf + pi-mono |
+| Destination | HuggingFace datasets | Ensue network |
+| Agents | pi-mono only | Claude Code, Codex, Aider, Cline, Continue, pi-mono |
+| Capture | Manual CLI | Automatic (Claude Code) or manual |
+| Discovery | HF dataset search | Real-time semantic search by agents |
+| Knowledge | Raw traces only | Traces + curated knowledge extraction |
+| PII | Deterministic + LLM | Deterministic + TruffleHog + LLM |
 
-`upload` pushes only sessions that passed deterministic checks, TruffleHog, and LLM review.
+## Links
 
-It skips sessions that are manually rejected, missing review data, failed review, or already unchanged on the remote dataset.
-
-Use `upload --dry-run` first if you want counts without pushing anything.
-
-## Review before upload
-
-Before uploading, inspect what is currently uploadable:
-
-```bash
-pi-share-hf list --uploadable
-```
-
-Useful checks:
-
-- search the uploadable set with `pi-share-hf grep`
-- review `deny.txt` and rerun `collect` if you discover a new never-publish topic
-- inspect `.pi/hf-sessions/images/` when image preservation is enabled
-- inspect `.pi/hf-sessions/reports/*.trufflehog.json` only if you want to debug or audit why a session was blocked by TruffleHog
-- reject anything suspicious manually with `pi-share-hf reject`
-
-Typical grep checks:
-
-```bash
-pi-share-hf grep -i 'private-project|counterparty|finance|agreement|royalt'
-pi-share-hf grep -i 'gmail|calendar|drive|slack'
-```
-
-## Commands
-
-### `init`
-
-Creates `.pi/hf-sessions/`, writes `workspace.json`, and records which project directory maps to which Hugging Face dataset repo.
-
-By default it uses:
-
-- current directory as `--cwd`
-- `.pi/hf-sessions` as `--workspace`
-- preserved embedded images
-
-```bash
-pi-share-hf init --repo user/dataset
-pi-share-hf init --repo dataset-name --organization myorg
-```
-
-Main options:
-
-- `--cwd <dir>` project directory to map to pi session storage
-- `--repo <id>` HF dataset repo
-- `--organization <name>` optional namespace when `--repo` is a bare name
-- `--workspace <dir>` workspace dir, default `.pi/hf-sessions`
-- `--no-images` strip embedded images from redacted output
-
-### `collect`
-
-Collects sessions for the configured project, redacts literal secrets, runs TruffleHog on changed redacted files, and runs the LLM review to write or update review sidecars.
-
-By default it uses:
-
-- `.pi/hf-sessions` as `--workspace`
-- `~/.zshrc` as `--env-file`
-- `README.md` and `AGENTS.md` as context files when present
-- current pi settings unless you override provider, model, or thinking
-
-```bash
-pi-share-hf collect [context-files...]
-```
-
-Main options:
-
-- `--workspace <dir>` workspace, default `.pi/hf-sessions`
-- `--env-file <path>` secret source file, default `~/.zshrc`
-- `--secret <file>|<text>` repeatable
-- `--force` reprocess all sessions
-- `--provider <name>` review provider override
-- `--model <id>` review model override
-- `--thinking <level>` review thinking override
-- `--parallel <n>` concurrent LLM reviews
-- `--deny <file>|<regex>` reject sessions matching this pattern
-- `--session <file>` process one session only
-
-### `review`
-
-Reruns only the LLM review step on already-redacted sessions in the workspace.
-
-By default it uses:
-
-- `.pi/hf-sessions` as `--workspace`
-- `README.md` and `AGENTS.md` as context files when present
-- current pi settings unless you override provider, model, or thinking
-
-```bash
-pi-share-hf review [context-files...]
-```
-
-Uses the same review-related flags as `collect`.
-
-### `reject`
-
-Marks a session as never uploadable by adding it to `reject.txt`.
-
-By default it uses `.pi/hf-sessions` as `--workspace`.
-
-```bash
-pi-share-hf reject <session.jsonl|image.png>
-```
-
-If you pass an extracted image path, the owning session is rejected.
-
-### `list`
-
-Lists sessions from the workspace.
-
-By default it uses `.pi/hf-sessions` as `--workspace`.
-
-```bash
-pi-share-hf list --uploadable
-```
-
-### `grep`
-
-Searches only the currently uploadable sessions.
-
-By default it uses `.pi/hf-sessions` as `--workspace`.
-
-```bash
-pi-share-hf grep -i 'finance|counterparty|private-project'
-```
-
-### `upload`
-
-Uploads the current uploadable sessions and updates the remote dataset manifest.
-
-By default it uses `.pi/hf-sessions` as `--workspace`.
-
-```bash
-pi-share-hf upload --dry-run
-pi-share-hf upload
-```
-
-Uses the built-in TypeScript Hugging Face client. No `huggingface-cli` is needed.
-
-## Workspace layout
-
-```text
-.pi/hf-sessions/
-  workspace.json
-  manifest.local.jsonl
-  remote-manifest.jsonl
-  manifest.jsonl
-  redacted/       public candidate files
-  reports/        private deterministic + TruffleHog reports
-  review/         private LLM review sidecars
-  review-chunks/  private transcript chunks
-  images/         extracted preserved images for uploadable sessions
-  reject.txt
-```
-
-## Dataset layout
-
-```text
-manifest.jsonl
-<session>.jsonl
-```
-
-Each uploaded `*.jsonl` file is a redacted pi session.
-
-Session format docs:
-
-- https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session.md
-
-## Development
-
-```bash
-npm run check
-```
+- [Ensue Network](https://ensue-network.ai) — the collective intelligence platform
+- [Ensue Docs](https://ensue.dev/docs) — API documentation
+- [pi-share-hf](https://github.com/badlogic/pi-share-hf) — the original trace sharing tool
+- [pi-mono](https://github.com/badlogic/pi-mono) — the pi coding agent and session format

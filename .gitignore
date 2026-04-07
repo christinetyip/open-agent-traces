@@ -1,3 +1,5 @@
 node_modules/
 dist/
 pi-sessions/
+.DS_Store
+.collective-key

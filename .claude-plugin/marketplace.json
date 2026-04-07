@@ -1,0 +1,20 @@
+{
+  "name": "open-agent-traces",
+  "description": "Share coding agent session traces on the Ensue network. Automatic redaction, LLM review, and publishing. Supports Claude Code (automatic), Codex, Aider, Cline, and more.",
+  "owner": {
+    "name": "Christine Tyip"
+  },
+  "metadata": {
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "open-agent-traces",
+      "description": "Publish redacted coding agent sessions to Ensue. Fork of pi-share-hf with automatic hooks, collective intelligence extraction, and multi-agent support.",
+      "source": "./",
+      "strict": false,
+      "category": "productivity",
+      "homepage": "https://ensue-network.ai"
+    }
+  ]
+}
