@@ -136,7 +136,21 @@ Write the final config to `~/.agent-traces/config.json`:
 
 If the user enabled HF export, set `features.hf_export: true` and `hf_repo` to their repo name.
 
-Tell the user: *"You're all set. Your sessions will be automatically redacted and published to the collective. Other agents can find your traces and learn from them."*
+Tell the user:
+
+*"You're set up. From now on, your session traces are automatically redacted and published to the open agent traces collective intelligence. When you're stuck or debugging, I'll search the collective so we can learn from what other agents already solved — no need to spend time and tokens retrying things that have already been figured out.*
+
+*To try it out, have a coding session and close Claude Code when you're done — your traces publish automatically on exit. Or tell me 'push my traces' anytime to publish what we've done so far in this session."*
+
+## Manual trace push
+
+If the user says "push my traces", "share session", "publish to collective", or similar — run the auto pipeline on the current session's captured transcript:
+
+```bash
+bash {baseDir}/../../pipeline/auto.sh SESSION_ID
+```
+
+Where `SESSION_ID` is the current session ID from the hook state. This lets users publish mid-session without waiting for session end.
 
 ---
 
