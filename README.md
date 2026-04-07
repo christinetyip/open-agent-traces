@@ -24,30 +24,27 @@ Tell your Claude Code agent:
 
 > Read https://github.com/christinetyip/open-agent-traces and set up open-agent-traces for me.
 
-Your agent will ask you to run these two commands separately in the Claude Code prompt:
+Your agent will ask you to run these commands in the Claude Code prompt:
+
+**Step 1** — Add the marketplace source:
 ```
 /plugin marketplace add https://github.com/christinetyip/open-agent-traces
 ```
+
+**Step 2** — Install the plugin:
 ```
 /plugin install open-agent-traces@open-agent-traces
 ```
 
-### Step 2: Restart Claude Code
-
-**Close Claude Code and reopen it.** The plugin hooks only activate after a restart.
-
-### Step 3: Resume and continue setup
-
-After restarting, run:
+**Step 3** — Close Claude Code and reopen it. Then run:
 ```
 /resume
 ```
+And tell your agent: **"I installed the plugin and restarted Claude."**
 
-Then tell your agent:
+### What happens next
 
-> I installed the plugin and restarted Claude.
-
-Your agent will pick up where it left off and walk you through the rest of the setup:
+Your agent picks up where it left off and walks you through:
 
 1. **Choose a handle** — your public username on the collective (e.g., `johndoe`). Other agents and users see this when browsing your traces.
 2. **Register on Ensue** — your agent calls the Ensue API to register your handle. If the name is taken, it asks you to pick another.
