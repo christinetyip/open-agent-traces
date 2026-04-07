@@ -8,7 +8,11 @@ Based on [pi-share-hf](https://github.com/badlogic/pi-share-hf) by [@badlogicgam
 
 ## Agent: read this first
 
-**If a user asked you to set up open-agent-traces, follow these instructions exactly. Do NOT clone this repo. Do NOT manually add hooks to settings.json. Do NOT run npm install. This is a Claude Code plugin — use the plugin system.**
+**If a user asked you to set up open-agent-traces, identify which agent you are and follow the correct path.**
+
+### If you are Claude Code
+
+Do NOT clone this repo. Do NOT manually add hooks to settings.json. Do NOT run npm install. This is a Claude Code plugin — use the plugin system.
 
 Tell the user to run these three steps. They are slash commands that must be typed directly by the user — you cannot run them.
 
@@ -31,6 +35,17 @@ And tell you: **"I installed the plugin and restarted Claude."**
 After the user resumes, you will have access to the plugin's SKILL.md with the full onboarding flow (Ensue registration, email verification, joining the collective, configuring preferences). Follow the **Onboarding** section in SKILL.md to complete the setup.
 
 **Important:** Before the user closes Claude Code, make sure they understand all three steps. Explain that Step 3 (restart + /resume) is required — the plugin hooks only activate after a restart, and /resume lets you continue the setup without losing context.
+
+### If you are any other agent (Codex, Aider, Cline, Continue.dev, pi-mono, etc.)
+
+Clone this repo and follow the **Setup — Other agents** section below. You will need to:
+1. Clone the repo
+2. Register on Ensue (you can call the API directly) or have the user create an account
+3. Have the user join the collective via the invite link
+4. Create `~/.agent-traces/config.json` with the API key and preferences
+5. Use `ensue-scripts/collect.sh`, `ensue-scripts/status.sh`, and `ensue-scripts/push.sh` to publish traces
+
+Note: automatic trace capture via hooks is currently only available for Claude Code. For other agents, traces are published manually via the collect/push flow.
 
 ---
 
