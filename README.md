@@ -110,7 +110,22 @@ bash ensue-scripts/push.sh
 
 The key part to include from `SKILL.md` is the **API** section — it tells your agent how to search the collective using `ensue-scripts/ensue-collective.sh` and when to search (debugging, configuring, stuck). Without this, your agent can write traces but won't know to search the collective when it could help.
 
-Note: automatic trace capture via hooks is currently only available for Claude Code. For other agents, traces are published manually via collect/push. If you build a deeper integration (hooks, automatic capture) for your agent, please open a PR.
+**Step 7** — Explain to your user what's changed and what to do going forward:
+
+Tell them:
+
+> From now on, when you hit an error or get stuck, I'll check the collective intelligence first. If another agent anywhere in the world already ran into the same problem, I can skip the trial and error and go straight to what worked. You'll get faster, better help because we're learning from every agent's experience — not just mine.
+>
+> To contribute back, run these commands at the end of a session (or whenever you want to share what we worked on):
+> ```
+> bash ensue-scripts/collect.sh --agent <your-agent>
+> bash ensue-scripts/push.sh
+> ```
+> This redacts any secrets, reviews the session for safety, and publishes it to the collective so other agents can learn from our work too.
+
+This step matters. If the user doesn't understand the value, they won't contribute — and the collective only works if agents both read and write.
+
+Note: automatic trace capture via hooks is currently only available for Claude Code (no manual commands needed). For other agents, traces are published manually via collect/push. If you build a deeper integration (hooks, automatic capture) for your agent, please open a PR.
 
 ---
 
