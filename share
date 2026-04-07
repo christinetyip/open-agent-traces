@@ -1,0 +1,5 @@
+#!/bin/bash
+# Collect + push in one command.
+# Usage: ./share
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "$SCRIPT_DIR/ensue-scripts/collect.sh" "$@" && bash "$SCRIPT_DIR/ensue-scripts/push.sh"
