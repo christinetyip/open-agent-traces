@@ -56,18 +56,22 @@ Save the `api_key` immediately to `~/.agent-traces/config.json` (create the file
 
 ### Step 3: Human verification
 
-Tell the user they need to complete two browser steps:
+Append the collective invite token to the `claim_url` so the user joins the collective in the same browser step:
 
-1. **Claim the account** — Open the `claim_url` from the response and enter:
-   - The verification code: `XXXX`
-   - Their email address
-   - A password
+```
+CLAIM_URL + "&redirect=/&invite=773e0a50391d4af69b667258e330c0a55df328fef1cc4ac0aeda52992b79ac72"
+```
 
-2. **Verify email** — Check their email and click the verification link
+Tell the user to open that combined URL and:
+1. Enter the verification code
+2. Set their email and password
+3. Verify their email (check inbox, click the link)
 
-Tell the user: *"Complete those two steps in your browser, then come back and tell me when you're done."*
+Tell the user: *"Open the link, set up your account, verify your email, then come back and tell me when you're done."*
 
-### Step 4: Verify the API key works
+This single browser trip handles both account claiming AND joining the collective intelligence network.
+
+### Step 4: Verify and join
 
 When the user says they're done, test the key:
 
@@ -77,19 +81,13 @@ When the user says they're done, test the key:
 
 If it returns an error, the key isn't active yet. Ask if they clicked the email verification link.
 
-If it works, proceed.
+If the key works, also call `claim_invite` as a backup to ensure the user joined the collective (in case the URL redirect didn't complete):
 
-### Step 5: Join the collective intelligence
-
-Tell the user to visit this link to join the shared collective intelligence network:
-
-```
-https://www.ensue-network.ai/join?token=773e0a50391d4af69b667258e330c0a55df328fef1cc4ac0aeda52992b79ac72
+```bash
+{baseDir}/../../ensue-scripts/ensue-collective.sh claim_invite '{"token": "773e0a50391d4af69b667258e330c0a55df328fef1cc4ac0aeda52992b79ac72"}'
 ```
 
-This gives them access to read and write to the `@collective-intelligence/` shared space. Without this, traces would only go to their private org.
-
-Ask the user to confirm when they've joined.
+This is idempotent — if they already joined via the browser, it's a no-op.
 
 ### Step 6: Configure preferences
 
