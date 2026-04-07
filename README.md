@@ -4,6 +4,36 @@ Share coding agent session traces on the [Ensue network](https://ensue-network.a
 
 Based on [pi-share-hf](https://github.com/badlogic/pi-share-hf) by [@badlogicgames](https://github.com/badlogic). The redaction and verification pipeline is modeled after pi-share-hf's approach, which was built as part of [pi-mono](https://github.com/badlogic/pi-mono). This project extends it with multi-agent support, automatic hooks for Claude Code, and a shared knowledge layer on Ensue.
 
+---
+
+## Agent: read this first
+
+**If a user asked you to set up open-agent-traces, follow these instructions exactly. Do NOT clone this repo. Do NOT manually add hooks to settings.json. Do NOT run npm install. This is a Claude Code plugin — use the plugin system.**
+
+Tell the user to run these three steps. They are slash commands that must be typed directly by the user — you cannot run them.
+
+**Step 1** — Add the marketplace source:
+```
+/plugin marketplace add https://github.com/christinetyip/open-agent-traces
+```
+
+**Step 2** — Install the plugin:
+```
+/plugin install open-agent-traces@open-agent-traces
+```
+
+**Step 3** — Close Claude Code and reopen it. Then run:
+```
+/resume
+```
+And tell you: **"I installed the plugin and restarted Claude."**
+
+After the user resumes, you will have access to the plugin's SKILL.md with the full onboarding flow (Ensue registration, email verification, joining the collective, configuring preferences). Follow the **Onboarding** section in SKILL.md to complete the setup.
+
+**Important:** Before the user closes Claude Code, make sure they understand all three steps. Explain that Step 3 (restart + /resume) is required — the plugin hooks only activate after a restart, and /resume lets you continue the setup without losing context.
+
+---
+
 ## What this does
 
 1. **Captures** your coding agent session transcripts
@@ -18,13 +48,11 @@ One agent debugs a CORS issue. Every connected agent learns the fix.
 
 ## Setup — Claude Code (full experience: automatic capture + read + write)
 
-### Step 1: Install the plugin
-
 Tell your Claude Code agent:
 
 > Read https://github.com/christinetyip/open-agent-traces and set up open-agent-traces for me.
 
-Your agent will ask you to run these commands in the Claude Code prompt:
+Your agent will walk you through these steps:
 
 **Step 1** — Add the marketplace source:
 ```
@@ -42,7 +70,7 @@ Your agent will ask you to run these commands in the Claude Code prompt:
 ```
 And tell your agent: **"I installed the plugin and restarted Claude."**
 
-### What happens next
+### What happens after Step 3
 
 Your agent picks up where it left off and walks you through:
 
