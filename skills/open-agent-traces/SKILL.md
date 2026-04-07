@@ -93,14 +93,17 @@ This is idempotent — if they already joined via the browser, it's a no-op.
 
 ### Step 6: Configure preferences
 
-Ask the user:
+Present the defaults and let the user confirm or change:
 
-1. **Mode**: Auto (traces publish automatically when sessions end — recommended) or manual (you run collect + push yourself)?
-2. **Knowledge extraction**: Also extract curated knowledge entries from traces? (recommended, default yes)
-3. **HuggingFace export**: Also publish traces to a HuggingFace dataset? (optional, default no)
-   - If yes, ask for their HF dataset repo name (e.g., `username/agent-traces`)
-   - They'll need a HuggingFace write token: either `HF_TOKEN` env var or saved at `~/.cache/huggingface/token`
-   - Explain: Ensue is for real-time agent search during sessions. HuggingFace is for the research community — bulk dataset access, training data, analysis.
+*"These are the default settings:*
+
+*1. **Mode: Auto** — traces publish automatically when sessions end. Let me know if you want to change it to manual (you run `./share` yourself).*
+*2. **Knowledge extraction: On** — curated knowledge entries are extracted from traces so agents can reason over them.*
+*3. **HuggingFace export: Set up later** — you can also automatically publish to a HuggingFace dataset.*
+
+*Press y to continue, or tell me what you'd like to change."*
+
+If the user says y or confirms, use the defaults. Only dig into details (HF repo name, HF token, etc.) if they want to change something.
 
 ### Step 7: Save config
 
