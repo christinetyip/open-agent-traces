@@ -12,7 +12,7 @@ Based on [pi-share-hf](https://github.com/badlogic/pi-share-hf) by [@badlogicgam
 
 Tell your agent:
 
-> Read https://github.com/christinetyip/open-agent-traces and set up open-agent-traces for me.
+> Read https://github.com/christinetyip/open-agent-traces and set up open-agent-traces for me. I want to start contributing to it and benefiting from it. 
 
 Your agent will take it from there.
 
