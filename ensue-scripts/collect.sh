@@ -2,8 +2,9 @@
 # 3-step flow: Step 1 — Collect sessions, redact, review, stage locally.
 # Does NOT publish. Use push.sh after reviewing with status.sh.
 #
-# Usage: scripts/collect.sh --agent <agent-type> [--session <file>] [--env-file <path>] [--secrets <path>]
+# Usage: scripts/collect.sh [--agent <agent-type>] [--session <file>] [--env-file <path>] [--secrets <path>]
 #
+# Agent type is read from config (default_agent) if not specified.
 # Agents: claude-code, codex, aider, cline, continue-dev, pi-mono
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,7 +26,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -z "$AGENT" ] && echo "Error: --agent required (claude-code, codex, aider, cline, continue-dev, pi-mono)" && exit 1
+: "${AGENT:=$DEFAULT_AGENT}"
+[ -z "$AGENT" ] && echo "Error: no agent type. Set default_agent in ~/.agent-traces/config.json or pass --agent" && exit 1
 
 # Find session files based on agent type
 SESSION_FILES=()
