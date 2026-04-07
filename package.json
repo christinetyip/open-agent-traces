@@ -1,6 +1,6 @@
 {
-  "name": "pi-share-hf",
-  "version": "0.5.0",
+  "name": "open-agent-traces",
+  "version": "0.6.0",
   "type": "module",
   "bin": "dist/index.js",
   "files": [
