@@ -52,7 +52,9 @@ Save the `api_key` immediately to `~/.agent-traces/config.json` (create the file
 }
 ```
 
-**If the handle is taken**, the API returns an error. Tell the user and ask for a different handle. Keep trying until one works.
+**If the handle is taken**, ask the user: *"That handle is taken — is it yours? If you already have the API key for it, paste it here. Otherwise, pick a different handle."*
+- If they provide a key → save it to config, test connectivity, call `claim_invite` (see Step 4), then skip to Step 5 (Configure preferences).
+- If they pick a new handle → try registering again.
 
 ### Step 3: Human verification
 
