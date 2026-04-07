@@ -4,6 +4,5 @@
   "version": "0.6.0",
   "author": {
     "name": "Christine Yip"
-  },
-  "skills": ["./skills/open-agent-traces"]
+  }
 }
