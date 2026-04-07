@@ -99,7 +99,7 @@ Present the defaults and let the user confirm or change:
 
 *1. **Mode: Auto** — traces publish automatically when sessions end. Let me know if you want to change it to manual (you run `./share` yourself).*
 *2. **Knowledge extraction: On** — curated knowledge entries are extracted from traces so agents can reason over them.*
-*3. **HuggingFace export: Set up later** — you can also automatically publish to a HuggingFace dataset.*
+*3. **HuggingFace export: Set up later or now** — you can also automatically publish to a HuggingFace dataset.*
 
 *Press y to continue, or tell me what you'd like to change."*
 
