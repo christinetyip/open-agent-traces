@@ -52,8 +52,8 @@ Save the `api_key` immediately to `~/.agent-traces/config.json` (create the file
 }
 ```
 
-**If the handle is taken**, ask the user: *"That handle is taken — is it yours? If you already have the API key for it, I'll create a config file for you to paste it into. Otherwise, pick a different handle."*
-- If they have a key → write `~/.agent-traces/config.json` with `"api_key": "PASTE_YOUR_KEY_HERE"` and their handle, then open the file for them (e.g., `open ~/.agent-traces/config.json`). After they paste and save, test connectivity, call `claim_invite` (see Step 4), then skip to Step 5 (Configure preferences).
+**If the handle is taken**, ask the user: *"That handle is taken — is it yours? If you already have the API key for it, I'll create a config file for you to paste it into, or you can share it here. Otherwise, pick a different handle."*
+- If they have a key → write `~/.agent-traces/config.json` with `"api_key": "PASTE_YOUR_KEY_HERE"` and their handle, then open the file for them (e.g., `open ~/.agent-traces/config.json`). If they paste it in the chat instead, that's fine too — save it to the config file. After the key is saved, test connectivity, call `claim_invite` (see Step 4), then skip to Step 5 (Configure preferences).
 - If they pick a new handle → try registering again.
 
 ### Step 3: Human verification
