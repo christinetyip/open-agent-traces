@@ -24,14 +24,15 @@ Tell your Claude Code agent:
 
 > Read https://github.com/christinetyip/open-agent-traces and set up open-agent-traces for me.
 
-Or run the install command yourself:
+Or run the install commands yourself:
 ```
 /plugin marketplace add https://github.com/christinetyip/open-agent-traces
+/plugin install open-agent-traces@open-agent-traces
 ```
 
 ### Step 2: Restart Claude Code
 
-**You must restart Claude Code** for the plugin hooks to activate. Exit Claude Code completely and reopen it.
+Run `/reload-plugins` or **restart Claude Code** for the plugin hooks to activate.
 
 ### Step 3: Agent-guided onboarding
 
