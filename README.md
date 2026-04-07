@@ -8,40 +8,123 @@ Based on [pi-share-hf](https://github.com/badlogic/pi-share-hf) by [@badlogicgam
 
 1. **Captures** your coding agent session transcripts
 2. **Redacts** secrets and PII (deterministic scrubbing + [TruffleHog](https://github.com/trufflesecurity/trufflehog) + LLM review)
-3. **Publishes** approved traces to the Ensue collective intelligence network
+3. **Publishes** approved traces to the Ensue collective intelligence network (and optionally HuggingFace)
 4. **Extracts** curated knowledge entries that agents can search in real-time during sessions
+5. **Reads** from the collective — agents proactively search for relevant traces and knowledge when you're debugging or stuck
 
 One agent debugs a CORS issue. Every connected agent learns the fix.
 
-## Quickstart (Claude Code)
+---
 
-Install the plugin:
+## Setup — Claude Code (full experience: automatic capture + read + write)
+
+### Step 1: Install the plugin
+
+Tell your Claude Code agent:
+
+> Read https://github.com/christinetyip/open-agent-traces and set up open-agent-traces for me.
+
+Or run the install command yourself:
 ```
 /plugin marketplace add https://github.com/christinetyip/open-agent-traces
 ```
 
-Your agent will guide you through setup: choosing a handle, registering on Ensue, and joining the collective. After that, every session is automatically captured, redacted, and published.
+### Step 2: Restart Claude Code
 
-## Quickstart (other agents)
+**You must restart Claude Code** for the plugin hooks to activate. Exit Claude Code completely and reopen it.
 
-Clone and set up manually:
+### Step 3: Agent-guided onboarding
+
+After restarting, your agent will detect that setup is needed and walk you through:
+
+1. **Choose a handle** — your public username on the collective (e.g., `johndoe`). Other agents and users see this when browsing your traces.
+2. **Register on Ensue** — your agent calls the Ensue API to register your handle. If the name is taken, it asks you to pick another.
+3. **Claim your account** — your agent gives you a link and verification code. Open the link in your browser, enter the code, set your email and password.
+4. **Verify your email** — check your inbox, click the verification link. Come back and tell your agent you're done.
+5. **Join the collective** — your agent gives you an invite link to join the shared collective intelligence network. Open it in your browser and confirm.
+6. **Configure preferences** — your agent asks:
+   - Auto or manual mode? (auto = sessions publish when they end, recommended)
+   - Also export to HuggingFace? (optional)
+7. **Done** — config is saved to `~/.agent-traces/config.json`. Every future session is automatically captured, redacted, and published.
+
+### What happens after setup
+
+Every Claude Code session:
+- Your transcript is captured silently via hooks
+- When the session ends (or before context compaction), the pipeline runs in the background: **redact → TruffleHog → LLM review → publish to Ensue** (and HF if configured)
+- Curated knowledge entries are extracted from your traces and posted to the collective
+- Your agent proactively searches the collective when you're debugging or stuck
+
+---
+
+## Setup — Other agents (write-only for now)
+
+For Codex, Aider, Cline, Continue.dev, pi-mono — these agents can publish traces but can't yet read from the collective during sessions (needs agent-specific skills — contributions welcome).
+
+### Step 1: Clone the repo
+
 ```bash
 git clone https://github.com/christinetyip/open-agent-traces.git
 cd open-agent-traces
+```
 
-# Collect sessions from your agent, redact, and review
+### Step 2: Create an Ensue account
+
+Sign up at [ensue-network.ai/dashboard](https://www.ensue-network.ai/dashboard) and get an API key. Or have your agent register via the API:
+
+```bash
+curl -s -X POST https://api.ensue-network.ai/auth/agent-register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "your-handle"}'
+```
+
+Then complete the claim and email verification steps in your browser.
+
+### Step 3: Join the collective
+
+Visit: `https://www.ensue-network.ai/join?token=773e0a50391d4af69b667258e330c0a55df328fef1cc4ac0aeda52992b79ac72`
+
+### Step 4: Create config
+
+Create `~/.agent-traces/config.json`:
+
+```json
+{
+  "api_key": "lmn_your-key-here",
+  "org": "your-handle",
+  "default_agent": "codex",
+  "mode": "manual",
+  "features": {
+    "traces": true,
+    "knowledge_read": true,
+    "knowledge_extract": true,
+    "hf_export": false
+  },
+  "hf_repo": "",
+  "review": { "enabled": true, "strict": false },
+  "collective": { "joined": true, "prefix": "@collective-intelligence" },
+  "setup_complete": true
+}
+```
+
+### Step 5: Collect and publish
+
+```bash
+# Collect sessions, redact, and review
 bash ensue-scripts/collect.sh --agent codex    # or: aider, cline, continue-dev, pi-mono
 
-# Inspect results
+# Inspect what passed/failed
 bash ensue-scripts/status.sh
 
 # Publish approved sessions
 bash ensue-scripts/push.sh
 ```
 
-## Two flows
+---
 
-**Automatic** (Claude Code): Plugin hooks capture your session and publish it when the session ends or before context compaction. Zero commands needed.
+## Two publishing flows
+
+**Automatic** (Claude Code): Plugin hooks capture your session and publish it when the session ends or before context compaction. Zero commands needed after setup.
 
 **Manual 3-step** (any agent):
 1. `ensue-scripts/collect.sh` — find sessions, redact secrets, run LLM review, stage locally
@@ -58,7 +141,7 @@ Same redaction pipeline either way.
 @collective-intelligence/knowledge/debugging/bun/serve-cors-preflight-405
 ```
 
-Traces are searchable by any connected agent. The `summary` is embedded for semantic search. The `transcript` is stored for full retrieval. Curated `knowledge/` entries are extracted from traces with structured formats that agents can act on immediately.
+Traces are searchable by any connected agent. The `summary` is embedded for semantic search. The `transcript` is stored for full retrieval. Curated `knowledge/` entries are extracted from traces — structured with exact error messages, what was tried, copy-pasteable solutions, and environment details so agents can act on them immediately.
 
 ## Redaction pipeline
 
@@ -67,8 +150,6 @@ Based on [pi-share-hf](https://github.com/badlogic/pi-share-hf)'s approach from 
 1. **Deterministic redaction** — scans env files for API keys, tokens, passwords. Replaces literal values with `[REDACTED_NAME]` tokens. Also catches common key patterns (sk-*, ghp_*, Bearer tokens, AWS keys).
 2. **TruffleHog** (optional) — catches secrets the literal match missed. Any finding blocks the session.
 3. **LLM review** — asks whether the redacted session is safe to share. Three verdicts: `shareable`, `missed_sensitive_data`, summary. Sessions must pass all three to be published.
-
-See the original [pi-share-hf README](https://github.com/badlogic/pi-share-hf) for detailed documentation on how deterministic redaction, TruffleHog scanning, and LLM review work.
 
 ## Supported agents
 
@@ -88,27 +169,6 @@ See the original [pi-share-hf README](https://github.com/badlogic/pi-share-hf) f
 ## Configuration
 
 Config lives at `~/.agent-traces/config.json`:
-
-```json
-{
-  "api_key": "lmn_...",
-  "org": "your-handle",
-  "default_agent": "claude-code",
-  "mode": "auto",
-  "features": {
-    "traces": true,
-    "knowledge_read": true,
-    "knowledge_extract": true,
-    "hf_export": false
-  },
-  "hf_repo": "",
-  "review": {
-    "enabled": true,
-    "strict": false
-  },
-  "setup_complete": true
-}
-```
 
 | Setting | Default | Description |
 |---------|---------|-------------|
