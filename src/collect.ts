@@ -3,10 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
-import { bold, cyan, green } from "./colors.ts";
+import { bold, cyan, dim, green, yellow } from "./colors.ts";
 import { Redactor } from "./redactor.ts";
-import { computeSecretHash } from "./secrets.ts";
 import { runReview } from "./review.ts";
+import { computeSecretHash } from "./secrets.ts";
+import { formatTruffleHogFinding, saveTruffleHogReport, scanFilesWithTruffleHog, trufflehogReportPath } from "./trufflehog.ts";
 import type { CollectOptions, InitOptions, JsonObject, ReviewOptions } from "./types.ts";
 import { LOCAL_MANIFEST_FILE, REDACTION_VERSION, REMOTE_MANIFEST_CACHE_FILE } from "./types.ts";
 import {
@@ -21,6 +22,8 @@ import {
   writeJsonlFile,
   writeWorkspaceConfig,
 } from "./workspace.ts";
+
+const TRUFFLEHOG_BATCH_SIZE = 50;
 
 export async function runInit(options: InitOptions): Promise<void> {
   resetWorkspaceForCollect(options.workspace);
@@ -60,6 +63,12 @@ export async function runCollect(options: CollectOptions): Promise<void> {
   let processedNew = 0;
   let processedChanged = 0;
   let sessionsWithSecretRedactions = 0;
+  let sessionsWithTruffleHogFindings = 0;
+  let sessionsWithVerifiedTruffleHogFindings = 0;
+  let sessionsWithUnverifiedTruffleHogFindings = 0;
+  let sessionsWithUnknownTruffleHogFindings = 0;
+  const processedTruffleHogFindings: Array<{ file: string; findings: string[] }> = [];
+  const trufflehogScanQueue: Array<{ file: string; redactedPath: string; redactedHash: string }> = [];
 
   console.log(bold("Collect"));
   process.stdout.write(`  ${bold("Sessions found:")} 0`);
@@ -75,6 +84,7 @@ export async function runCollect(options: CollectOptions): Promise<void> {
     const localEntry = localManifest.get(file);
     const redactedPath = workspacePath(options.workspace, "redacted", file);
     const reportPath = workspacePath(options.workspace, "reports", `${file}.report.jsonl`);
+    const trufflehogPath = trufflehogReportPath(options.workspace, file);
 
     if (
       !options.force
@@ -82,6 +92,7 @@ export async function runCollect(options: CollectOptions): Promise<void> {
       && localEntry.redaction_key === redactionKey
       && fs.existsSync(redactedPath)
       && fs.existsSync(reportPath)
+      && fs.existsSync(trufflehogPath)
     ) {
       reusedLocal++;
       continue;
@@ -103,6 +114,12 @@ export async function runCollect(options: CollectOptions): Promise<void> {
       sessionsWithSecretRedactions++;
     }
 
+    trufflehogScanQueue.push({
+      file,
+      redactedPath,
+      redactedHash: result.redactedHash,
+    });
+
     localManifest.set(file, {
       file,
       source_file: inputPath,
@@ -116,8 +133,55 @@ export async function runCollect(options: CollectOptions): Promise<void> {
     processed++;
   }
 
+  if (trufflehogScanQueue.length > 0) {
+    console.log();
+    console.log();
+    console.log(bold("TruffleHog"));
+    process.stdout.write(`  ${bold("Processed sessions:")} 0/${trufflehogScanQueue.length}`);
+  }
+
+  let trufflehogProcessed = 0;
+  for (let i = 0; i < trufflehogScanQueue.length; i += TRUFFLEHOG_BATCH_SIZE) {
+    const batch = trufflehogScanQueue.slice(i, i + TRUFFLEHOG_BATCH_SIZE);
+    const reports = await scanFilesWithTruffleHog(batch);
+
+    for (const entry of batch) {
+      const trufflehogReport = reports.get(entry.file);
+      if (!trufflehogReport) {
+        throw new Error(`Missing TruffleHog report for ${entry.file}`);
+      }
+      saveTruffleHogReport(trufflehogReportPath(options.workspace, entry.file), trufflehogReport);
+
+      if (trufflehogReport.summary.findings > 0) {
+        sessionsWithTruffleHogFindings++;
+        processedTruffleHogFindings.push({
+          file: entry.file,
+          findings: trufflehogReport.findings.map((finding) => formatTruffleHogFinding(finding)),
+        });
+      }
+      if (trufflehogReport.summary.verified > 0) {
+        sessionsWithVerifiedTruffleHogFindings++;
+      }
+      if (trufflehogReport.summary.unverified > 0) {
+        sessionsWithUnverifiedTruffleHogFindings++;
+      }
+      if (trufflehogReport.summary.unknown > 0) {
+        sessionsWithUnknownTruffleHogFindings++;
+      }
+
+      trufflehogProcessed++;
+      process.stdout.write(`\r  ${bold("Processed sessions:")} ${trufflehogProcessed}/${trufflehogScanQueue.length}`);
+    }
+  }
+
+  if (trufflehogScanQueue.length > 0) {
+    console.log();
+  }
+
   const keptEntries = [...localManifest.values()]
-    .filter((entry) => fs.existsSync(workspacePath(options.workspace, "redacted", entry.file)) && fs.existsSync(workspacePath(options.workspace, "reports", `${entry.file}.report.jsonl`)))
+    .filter((entry) => fs.existsSync(workspacePath(options.workspace, "redacted", entry.file))
+      && fs.existsSync(workspacePath(options.workspace, "reports", `${entry.file}.report.jsonl`))
+      && fs.existsSync(trufflehogReportPath(options.workspace, entry.file)))
     .sort((a, b) => a.file.localeCompare(b.file));
   writeJsonlFile(localManifestPath, keptEntries);
 
@@ -128,6 +192,24 @@ export async function runCollect(options: CollectOptions): Promise<void> {
   console.log(`  ${bold("New sessions:")} ${processedNew}`);
   console.log(`  ${bold("Changed sessions:")} ${processedChanged}`);
   console.log(`  ${bold("Sessions with secret redactions:")} ${sessionsWithSecretRedactions}`);
+  console.log(`  ${bold("Sessions with any TruffleHog findings:")} ${sessionsWithTruffleHogFindings}`);
+  console.log(`  ${bold("Sessions with verified TruffleHog findings:")} ${sessionsWithVerifiedTruffleHogFindings}`);
+  console.log(`  ${bold("Sessions with unverified TruffleHog findings:")} ${sessionsWithUnverifiedTruffleHogFindings}`);
+  console.log(`  ${bold("Sessions with unknown TruffleHog findings:")} ${sessionsWithUnknownTruffleHogFindings}`);
+
+  if (processedTruffleHogFindings.length > 0) {
+    console.log();
+    console.log(bold("TruffleHog findings"));
+    for (const entry of processedTruffleHogFindings) {
+      console.log(`  ${yellow(entry.file)}`);
+      for (const finding of entry.findings.slice(0, 10)) {
+        console.log(`    ${finding}`);
+      }
+      if (entry.findings.length > 10) {
+        console.log(`    ${dim(`... ${entry.findings.length - 10} more`)}`);
+      }
+    }
+  }
 
   const reviewOptions: ReviewOptions = {
     workspace: options.workspace,
@@ -192,7 +274,7 @@ async function processSessionFile(
       if (result.findings.length > 0) {
         linesWithFindings++;
         findingsCount += result.findings.length;
-        if (result.findings.some((f) => f.detector === "literal-secret" || f.detector === "secret-pattern")) {
+        if (result.findings.some((f) => f.detector === "literal-secret")) {
           hasSecretRedactions = true;
         }
         appendReportLine(reportStream, {

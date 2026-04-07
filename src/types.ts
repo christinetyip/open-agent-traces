@@ -2,7 +2,7 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [key:
 export type JsonObject = { [key: string]: JsonValue };
 
 export type Severity = "low" | "medium" | "high" | "critical";
-export type DetectorName = "literal-secret" | "secret-pattern" | "image" | "parse-error";
+export type DetectorName = "literal-secret" | "image" | "parse-error";
 export type AboutProject = "yes" | "no" | "mixed";
 export type Shareable = "yes" | "no" | "manual_review";
 export type MissedSensitiveData = "yes" | "no" | "maybe";
@@ -43,6 +43,33 @@ export interface ReviewOptions {
   parallel: number;
   denyPatterns: RegExp[];
   session?: string;
+}
+
+export type TruffleHogFindingStatus = "verified" | "unverified" | "unknown";
+
+export interface TruffleHogFinding {
+  detector: string;
+  decoder?: string;
+  status: TruffleHogFindingStatus;
+  line?: number;
+  raw_sha256?: string;
+  masked: string;
+  verification_from_cache: boolean;
+}
+
+export interface TruffleHogSummary {
+  findings: number;
+  verified: number;
+  unverified: number;
+  unknown: number;
+  top_detectors: string[];
+}
+
+export interface TruffleHogReport {
+  file: string;
+  redacted_hash: string;
+  findings: TruffleHogFinding[];
+  summary: TruffleHogSummary;
 }
 
 export interface UploadOptions {
@@ -134,13 +161,6 @@ export interface SessionReviewFile {
   aggregate: ChunkReviewResult;
 }
 
-export interface SecretPattern {
-  name: string;
-  regex: RegExp;
-  replacement: string;
-  severity: Severity;
-}
-
 export const CHARS_PER_REVIEW_TOKEN = 5;
 export const REVIEW_TOKEN_LIMIT = 100_000;
 export const REVIEW_CHUNK_CHAR_LIMIT = CHARS_PER_REVIEW_TOKEN * REVIEW_TOKEN_LIMIT;
@@ -153,3 +173,4 @@ export const REMOTE_MANIFEST_CACHE_FILE = "remote-manifest.jsonl";
 export const REJECT_FILE = "reject.txt";
 export const REVIEW_TOOL_RESULT_MAX_CHARS = 2000;
 export const REVIEW_JSON_VALUE_MAX_CHARS = 4000;
+export const TRUFFLEHOG_REPORT_SUFFIX = ".trufflehog.json";

@@ -1,5 +1,5 @@
 import type { Finding, JsonObject, JsonValue, RedactionResult } from "./types.ts";
-import { SECRET_PATTERNS, buildLiteralSecrets, countOccurrences, countRegexMatches } from "./secrets.ts";
+import { buildLiteralSecrets, countOccurrences } from "./secrets.ts";
 
 export class Redactor {
   private readonly literalSecrets: Array<{ name: string; value: string; replacement: string }>;
@@ -106,21 +106,6 @@ export class Redactor {
           replacement: secret.replacement,
           count,
           detail: secret.name,
-        });
-      }
-    }
-
-    for (const pattern of SECRET_PATTERNS) {
-      const count = countRegexMatches(result, pattern.regex);
-      if (count > 0) {
-        result = result.replace(pattern.regex, pattern.replacement);
-        findings.push({
-          detector: "secret-pattern",
-          severity: pattern.severity,
-          jsonPath,
-          replacement: pattern.replacement,
-          count,
-          detail: pattern.name,
         });
       }
     }

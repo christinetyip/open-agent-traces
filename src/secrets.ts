@@ -1,22 +1,6 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { SecretPattern } from "./types.ts";
-
-export const SECRET_PATTERNS: SecretPattern[] = [
-  { name: "openai-project", regex: /sk-proj-[A-Za-z0-9_-]{20,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "anthropic", regex: /sk-ant-[A-Za-z0-9_-]{20,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "openrouter", regex: /sk-or-[A-Za-z0-9_-]{20,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "groq", regex: /gsk_[A-Za-z0-9]{20,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "github", regex: /gh[pousr]_[A-Za-z0-9]{30,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "huggingface", regex: /hf_[A-Za-z0-9]{20,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "aws-access-key", regex: /AKIA[A-Z0-9]{12,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "xai", regex: /xai-[A-Za-z0-9_-]{20,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "google-ai", regex: /AIza[A-Za-z0-9_-]{30,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "cerebras", regex: /csk-[A-Za-z0-9_-]{20,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-  { name: "bearer-token", regex: /Bearer\s+[A-Za-z0-9_\-.]{20,}/g, replacement: "Bearer [REDACTED_SECRET]", severity: "critical" },
-  { name: "jwt", regex: /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, replacement: "[REDACTED_SECRET]", severity: "critical" },
-];
 
 export function buildLiteralSecrets(envFile: string, secretInputs: string[]): Array<{ name: string; value: string; replacement: string }> {
   const secrets = new Map<string, string>();
@@ -69,14 +53,6 @@ export function looksSensitiveName(name: string): boolean {
 export function countOccurrences(text: string, value: string): number {
   if (!value) return 0;
   return text.split(value).length - 1;
-}
-
-export function countRegexMatches(text: string, regex: RegExp): number {
-  const flags = regex.flags.includes("g") ? regex.flags : `${regex.flags}g`;
-  const globalRegex = new RegExp(regex.source, flags);
-  let count = 0;
-  while (globalRegex.exec(text) !== null) count++;
-  return count;
 }
 
 export function computeSecretHash(envFile: string, secretInputs: string[]): string {

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readHfAccessToken } from "./hf.ts";
 
 export async function runCommand(command: string, args: string[], cwd?: string): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
@@ -27,17 +28,6 @@ export async function runCommand(command: string, args: string[], cwd?: string):
   });
 }
 
-export function runCommandPassthrough(command: string, args: string[]): Promise<number> {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      stdio: "inherit",
-      env: process.env,
-    });
-    child.on("error", () => resolve(1));
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-}
-
 export async function commandExists(command: string): Promise<boolean> {
   const result = await runCommand(command, ["--help"]);
   return result.ok || !result.stderr.includes("ENOENT");
@@ -47,13 +37,32 @@ export async function ensureStartupTools(command: string): Promise<void> {
   const missing: string[] = [];
 
   if (command === "collect" || command === "upload") {
-    if (!(await commandExists("huggingface-cli"))) {
+    if (!readHfAccessToken()) {
       missing.push([
-        "Missing required command: huggingface-cli",
-        "Install it with:",
-        '  python3 -m pip install --user "huggingface_hub[cli]"',
-        "Then log in with:",
-        "  huggingface-cli login",
+        "Missing Hugging Face access token.",
+        "Set one of:",
+        "  export HF_TOKEN=hf_xxx",
+        "  export HUGGINGFACE_TOKEN=hf_xxx",
+        "Or write the token to:",
+        "  ~/.cache/huggingface/token",
+        "Create a token at:",
+        "  https://huggingface.co/settings/tokens",
+        "The token needs write access to the target dataset repo.",
+      ].join("\n"));
+    }
+  }
+
+  if (command === "collect") {
+    if (!(await commandExists("trufflehog"))) {
+      const install = process.platform === "darwin"
+        ? ["Install it with:", "  brew install trufflehog"]
+        : [
+            "Install it from the TruffleHog release artifacts or installation docs:",
+            "  https://github.com/trufflesecurity/trufflehog",
+          ];
+      missing.push([
+        "Missing required command: trufflehog",
+        ...install,
       ].join("\n"));
     }
   }

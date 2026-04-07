@@ -13,9 +13,10 @@ import type {
   SessionReviewFile,
   Shareable,
 } from "./types.ts";
-import { extractImagesFromSession, splitIntoReviewChunks } from "./review-serialize.ts";
 import { runCommand } from "./process.ts";
+import { extractImagesFromSession, splitIntoReviewChunks } from "./review-serialize.ts";
 import { computeDenyHash, computeReviewKey, hashContextFiles, loadReviewFile } from "./review-state.ts";
+import { blockingTruffleHogReason, loadTruffleHogReport, trufflehogReportPath } from "./trufflehog.ts";
 import { isRecord, readWorkspaceConfig, resetReviewDir, sha256File, workspacePath } from "./workspace.ts";
 
 export async function runReview(options: ReviewOptions): Promise<void> {
@@ -69,21 +70,47 @@ export async function runReview(options: ReviewOptions): Promise<void> {
     const redactedPath = workspacePath(options.workspace, "redacted", file);
     const reviewPath = workspacePath(options.workspace, "review", `${file}.review.json`);
     const reportPath = workspacePath(options.workspace, "reports", `${file}.report.jsonl`);
+    const trufflehogPath = trufflehogReportPath(options.workspace, file);
     const redactedHash = await sha256File(redactedPath);
     const reviewKey = computeReviewKey(redactedHash, contextHashes, options.provider, options.model, options.thinking, denyHash);
     const existingReview = loadReviewFile(reviewPath);
 
-    if (hasSecretRedactionFinding(reportPath)) {
+    const deterministicBlock = getDeterministicBlockReason(reportPath);
+    if (deterministicBlock) {
       const denyReview = createDenyReview(
         file, contextFiles, contextHashes, redactedHash, reviewKey,
-        options.provider, options.model, "deterministic-secret-redaction",
-        "Deterministic secret redaction triggered for this session.",
+        options.provider, options.model, deterministicBlock.reason,
+        deterministicBlock.evidence,
+        deterministicBlock.missedSensitiveData,
       );
       fs.writeFileSync(reviewPath, `${JSON.stringify(denyReview, null, 2)}\n`);
       deniedBySecrets++;
       continue;
     }
 
+    const trufflehogReport = loadTruffleHogReport(trufflehogPath);
+    if (!trufflehogReport) {
+      throw new Error(`Missing TruffleHog report: ${trufflehogPath}. Run collect first.`);
+    }
+
+    const trufflehogBlock = blockingTruffleHogReason(trufflehogReport);
+    if (trufflehogBlock) {
+      const denyReview = createDenyReview(
+        file,
+        contextFiles,
+        contextHashes,
+        redactedHash,
+        reviewKey,
+        options.provider,
+        options.model,
+        trufflehogBlock.reason,
+        trufflehogBlock.evidence,
+        trufflehogBlock.missedSensitiveData,
+      );
+      fs.writeFileSync(reviewPath, `${JSON.stringify(denyReview, null, 2)}\n`);
+      deniedBySecrets++;
+      continue;
+    }
     if (options.denyPatterns.length > 0) {
       const content = fs.readFileSync(redactedPath, "utf-8");
       const matchedPattern = options.denyPatterns.find((p) => p.test(content));
@@ -91,6 +118,7 @@ export async function runReview(options: ReviewOptions): Promise<void> {
         const denyReview = createDenyReview(
           file, contextFiles, contextHashes, redactedHash, reviewKey,
           options.provider, options.model, "deny-pattern", matchedPattern.source,
+          "no",
         );
         fs.writeFileSync(reviewPath, `${JSON.stringify(denyReview, null, 2)}\n`);
         deniedByPattern++;
@@ -109,7 +137,7 @@ export async function runReview(options: ReviewOptions): Promise<void> {
   console.log();
   console.log(bold("Filtering"));
   console.log(`  ${bold("Review candidate sessions:")} ${cyan(String(reviewCandidateSessions))}`);
-  console.log(`  ${bold("Denied by secret redaction (--secret, --env-file, token patterns):")} ${yellow(String(deniedBySecrets))}`);
+  console.log(`  ${bold("Denied by deterministic checks (literal secrets, parse errors, TruffleHog):")} ${yellow(String(deniedBySecrets))}`);
   console.log(`  ${bold("Denied by --deny pattern:")} ${yellow(String(deniedByPattern))}`);
   console.log(`  ${bold("Eligible for review:")} ${green(String(workItems.length + skipped))}`);
 
@@ -286,12 +314,16 @@ function writeDeniedReport(workspace: string, sessionFiles: string[]): void {
     lines.push(`## ${file}`);
     lines.push("");
 
-    const deterministicReason = aggregate.flagged_parts.find((part) => part.reason === "deterministic-secret-redaction" || part.reason === "deny-pattern");
+    const deterministicReason = aggregate.flagged_parts.find((part) => part.reason === "deterministic-secret-redaction" || part.reason === "parse-error" || part.reason === "deny-pattern" || part.reason === "trufflehog-findings");
     if (deterministicReason) {
       if (deterministicReason.reason === "deterministic-secret-redaction") {
-        lines.push("Reason: `--secret` / `--env-file` / token pattern redaction triggered.");
-      } else {
+        lines.push("Reason: `--secret` / `--env-file` literal secret redaction triggered.");
+      } else if (deterministicReason.reason === "parse-error") {
+        lines.push(`Reason: ${deterministicReason.evidence}`);
+      } else if (deterministicReason.reason === "deny-pattern") {
         lines.push(`Reason: \`--deny\` matched \`${deterministicReason.evidence}\`.`);
+      } else {
+        lines.push(`Reason: TruffleHog found blocked findings. ${deterministicReason.evidence}`);
       }
       lines.push("");
       continue;
@@ -624,9 +656,11 @@ function aggregateChunkReviews(chunks: SessionReviewFile["chunks"]): ChunkReview
   };
 }
 
-function hasSecretRedactionFinding(reportPath: string): boolean {
-  if (!fs.existsSync(reportPath)) return false;
+function getDeterministicBlockReason(reportPath: string): { reason: string; evidence: string; missedSensitiveData: MissedSensitiveData } | undefined {
+  if (!fs.existsSync(reportPath)) return undefined;
   const lines = fs.readFileSync(reportPath, "utf-8").split("\n");
+  let parseErrors = 0;
+
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
@@ -634,15 +668,31 @@ function hasSecretRedactionFinding(reportPath: string): boolean {
       if (!isRecord(parsed) || !Array.isArray(parsed.findings)) continue;
       for (const finding of parsed.findings) {
         if (!isRecord(finding)) continue;
-        if (finding.detector === "literal-secret" || finding.detector === "secret-pattern") {
-          return true;
+        if (finding.detector === "literal-secret") {
+          return {
+            reason: "deterministic-secret-redaction",
+            evidence: "Deterministic literal secret redaction triggered for this session.",
+            missedSensitiveData: "yes",
+          };
+        }
+        if (finding.detector === "parse-error") {
+          parseErrors++;
         }
       }
     } catch {
       // Ignore malformed lines.
     }
   }
-  return false;
+
+  if (parseErrors > 0) {
+    return {
+      reason: "parse-error",
+      evidence: `Session contains ${parseErrors} parse error(s) during deterministic redaction.`,
+      missedSensitiveData: "maybe",
+    };
+  }
+
+  return undefined;
 }
 
 function createDenyReview(
@@ -655,6 +705,7 @@ function createDenyReview(
   model: string | undefined,
   reason: string,
   evidence: string,
+  missedSensitiveData: MissedSensitiveData,
 ): SessionReviewFile {
   return {
     file,
@@ -669,9 +720,9 @@ function createDenyReview(
     chunk_char_limit: REVIEW_CHUNK_CHAR_LIMIT,
     chunks: [],
     aggregate: {
-      about_project: "no",
+      about_project: reason === "deny-pattern" ? "no" : "mixed",
       shareable: "no",
-      missed_sensitive_data: "no",
+      missed_sensitive_data: missedSensitiveData,
       flagged_parts: [{ reason, evidence }],
       summary: `Session denied: ${reason}: ${evidence}`,
     },

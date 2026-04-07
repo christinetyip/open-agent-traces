@@ -1,279 +1,377 @@
 # pi-share-hf
 
-Collect, review, reject, and upload redacted [pi](https://github.com/badlogic/pi-mono) session files to a Hugging Face dataset.
+Publish [pi](https://pi.dev) coding agent sessions from one OSS project to a Hugging Face dataset.
 
-Generated dataset cards include the tags `agent-traces`, `coding-agent`, and `pi-share-hf`, so datasets created by this tool can be found via Hugging Face dataset search and filters, for example:
-- https://huggingface.co/datasets?other=agent-traces
-- https://huggingface.co/datasets?other=coding-agent
-- https://huggingface.co/datasets?other=pi-share-hf
+It is an incremental pipeline for:
 
-> **Sharing coding agent sessions risks leaking secrets and PII.** Read this README fully before use. Understand what gets redacted, what does not, and the assumptions in the [Limitations](#limitations) section.
+1. collecting sessions for one project
+2. redacting exact secrets from your env file and `--secret`
+3. rejecting sessions that match user-provided deny patterns via `--deny`
+4. scanning redacted output with [TruffleHog](https://github.com/trufflesecurity/trufflehog) to detect and verify surviving secrets
+5. running LLM review on the remaining sessions
+6. uploading only sessions that pass all checks
 
-## What it does
+Use it if you want to:
 
-1. `init`: create a workspace for one OSS project
-2. `collect`: redact sessions and run LLM review
-3. `reject`: manually exclude a session from upload
-4. `upload`: upload approved sessions to a Hugging Face dataset
+- publish a public dataset of your pi traces
+- share real agent traces for analysis or training data
+- keep project-specific sessions on Hugging Face over time without reprocessing everything on every run
 
-## What gets redacted
+It keeps state in a workspace, so repeated runs only process what changed (updated sessions, new sessions).
 
-Every string field in every JSON object is scanned:
+## Supported input
 
-- literal secrets from `~/.zshrc`, `--env-file`, and `--secret`
-- common API key and token patterns
-
-For maximum safety, pass known secrets explicitly with `--secret`. It accepts a file (one secret per line) or a literal string, and can be repeated.
-
-## What does not get redacted deterministically
-
-- **Embedded images**: preserved unchanged by default, or stripped with `init --no-images`
-- **Emails, names, non-standard secrets**: not caught deterministically, the LLM review step flags these
-
-## Limitations
-
-Redacting coding agent sessions with 100% precision is not a solved problem.
-
-This tool targets OSS project sessions. These typically contain little private data. Most personal information (committer emails, GitHub usernames) is already public in git history. However, sessions can involve API keys and may mix project work with unrelated private tasks.
-
-Deterministic redaction handles known secrets reliably but does not catch all PII or non-standard secrets. The LLM review step fills that gap by judging whether sessions are project-related, safe to share, and free of leaked sensitive data. LLMs are imperfect, but currently the best approach for semantic review of unstructured content.
-
-If your OSS work does not involve many secrets, the dataset is likely in good shape after both steps. If it does, provide secrets explicitly with `--secret`.
+- [pi](https://pi.dev) coding agent session files
+- session format: https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session.md
 
 ## Install
 
 ```bash
-npm install
-npm link
-```
-
-### External tools
-
-`collect` and `upload` need `huggingface-cli`:
-
-```bash
-pip install "huggingface_hub[cli]"
-huggingface-cli login
-```
-
-When logging in:
-- create a token at https://huggingface.co/settings/tokens with **write** scope (Repositories > Write access)
-- say **Y** when asked to add the token as a git credential (HF dataset repos are git-backed, uploads use git credentials)
-- do **not** set `HF_TOKEN` as an environment variable, it overrides the saved login and causes confusion when rotating tokens
-
-`collect` and `review` need `pi`:
-
-```bash
+npm install -g pi-share-hf
 npm install -g @mariozechner/pi-coding-agent
 ```
 
-The CLI checks at startup and prints install instructions if missing.
+Install TruffleHog:
+
+```bash
+brew install trufflehog
+```
+
+For Linux and Windows, use the upstream install instructions:
+
+- https://github.com/trufflesecurity/trufflehog
+
+For Hugging Face auth, create a write token and either:
+
+```bash
+export HF_TOKEN=hf_xxx
+```
+
+or save it to:
+
+```text
+~/.cache/huggingface/token
+```
+
+The CLI checks startup requirements and exits with install or auth instructions if something is missing.
+
+## Workflow
+
+Use one workspace per OSS project. In your OSS project directory:
+
+1. add `.pi/hf-sessions/` to `.gitignore`
+2. run `pi-share-hf init` once
+3. run `pi-share-hf collect` to gather changed and new sessions, redact known secrets, filter by `--deny`, scan with TruffleHog, and run LLM review
+4. inspect what would be uploaded with `pi-share-hf list --uploadable`, `pi-share-hf grep`, and the images folder if images are enabled
+5. reject anything you do not want published
+6. run `pi-share-hf upload`
+7. repeat from step 3 whenever you want to publish new sessions
+
+The workspace is incremental. It keeps the collected state so repeated runs only process what changed.
+
+You can use pi-share-hf on multiple machines for the same project.
 
 ## Quick start
 
-Pick one OSS project you want to share regularly. Create one workspace and keep reusing it. The workspace tracks what has already been collected, reviewed, rejected, and uploaded, so you do not redo work.
-
-Preferred setup: one Hugging Face dataset repo per OSS project.
-
-It is fine to use multiple machines for the same OSS project and point them at the same dataset repo. It is not recommended to mix traces from different OSS projects into one dataset repo, because the generated dataset card and review context are project-specific.
-
-A good place for the workspace is inside your project directory, added to `.gitignore`:
+Inside your OSS project:
 
 ```bash
 cd /path/to/my-project
 echo ".pi/hf-sessions/" >> .gitignore
 ```
 
-Initialize the workspace once:
+Initialize once:
 
 ```bash
-# personal account
+# personal namespace
 pi-share-hf init --repo myuser/my-project-sessions
 
-# organization or explicit namespace
+# or org namespace
 pi-share-hf init --repo my-project-sessions --organization myorg
 ```
 
-Then collect + review:
+Collect sessions:
 
 ```bash
 pi-share-hf collect \
   --secret secrets.txt \
+  --deny deny.txt \
   --provider openai-codex --model gpt-5.4 --thinking medium \
   --parallel 4 \
-  --deny deny.txt \
   README.md AGENTS.md
 ```
 
-Optionally reject individual sessions after manual inspection:
+Recommended inputs:
+
+- `secrets.txt`: one known secret per line. Generate it just before `collect`, do not commit it, and delete it after use.
+- `deny.txt`: one regex per line for names, topics, or projects that should never be published
+- `README.md AGENTS.md`: project context for the LLM review so it can distinguish OSS work from unrelated work
+
+You can also repeat flags directly:
+
+- `--secret <file>` or `--secret <literal>`
+- `--deny <file>` or `--deny <regex>`
+
+If you do not want a secrets file on disk, pass repeated `--secret <literal>` values instead.
+
+Check what would be uploaded:
+
+```bash
+pi-share-hf list --uploadable
+```
+
+Search only the uploadable set:
+
+```bash
+pi-share-hf grep -i 'my-private-project|counterparty-name|finance'
+```
+
+Reject anything you do not want published:
 
 ```bash
 pi-share-hf reject 2026-01-16T11-03-04-216Z_b8b30402-d134-4f0d-9e6e-e2f72ada5a2f.jsonl
-pi-share-hf reject .pi/hf-sessions/images/2026-01-20T02-11-25-504Z_147339a0-f4ca-4ec6-b420-670213ec3ec6_L2181_0_aa43d6a2d140.png
 ```
 
-Then upload approved sessions:
+Upload:
 
 ```bash
+pi-share-hf upload --dry-run
 pi-share-hf upload
 ```
 
-Defaults:
-- `--cwd`: current directory for `init`
-- `--workspace`: `.pi/hf-sessions` for all commands
-- context files for `collect` and `review`: `README.md` and `AGENTS.md` if present
+## What deterministic redaction does
 
-Where:
-- `secrets.txt` has one secret per line (API keys, tokens, passwords)
-- `deny.txt` has one regex per line for topics that should never be shared (private project names, personal contacts, etc.)
-- `README.md AGENTS.md ...` are project context files for the review LLM so it can tell project work from unrelated activity
+It only knows exact secret values.
 
-Review is token-heavy. Each session chunk can be up to 100k tokens, and large sessions produce multiple chunks. Pick a model that balances cost and quality.
+Sources:
 
-Run the first few rounds manually so you can verify your secret and deny lists are catching everything. Check the review sidecars and use the [verification workflow](#verifying-results) to search for private keywords. Once the setup looks good, put the commands in a project-local script and keep using the same workspace.
+- `--env-file` (default: `~/.zshrc`)
+- `--secret <file>` with one secret per line
+- `--secret <literal>`
+
+This is deliberate. Exact values are high precision. Generic token regexes are noisy. TruffleHog handles generic secret detection after redaction.
+
+## What TruffleHog does here
+
+TruffleHog scans the redacted output, not the original raw session.
+
+That means:
+
+- exact secrets should already be gone
+- TruffleHog acts as a backstop for anything secret-like that survived
+
+Any TruffleHog finding blocks the session automatically.
+
+That includes:
+
+- `verified`
+- `unverified`
+- `unknown`
+
+So you do not need to manually inspect TruffleHog hits to decide whether a session is uploadable. The reports are there for debugging, auditing, and understanding why a session was blocked.
+
+Per-session TruffleHog reports are stored in:
+
+```text
+.pi/hf-sessions/reports/<session>.trufflehog.json
+```
+
+Example:
+
+```json
+{
+  "file": "...jsonl",
+  "redacted_hash": "sha256:...",
+  "findings": [
+    {
+      "detector": "NpmToken",
+      "status": "verified",
+      "line": 132,
+      "raw_sha256": "sha256:...",
+      "masked": "npm_tnl0***x4eE",
+      "verification_from_cache": false
+    }
+  ],
+  "summary": {
+    "findings": 1,
+    "verified": 1,
+    "unverified": 0,
+    "unknown": 0,
+    "top_detectors": ["NpmToken"]
+  }
+}
+```
+
+## What the LLM review does
+
+The LLM sees project context files plus a plain-text transcript of the redacted session.
+
+It answers:
+
+- is this about the target OSS project?
+- is it fit to publish publicly?
+- does it still appear to contain sensitive data?
+
+Review output includes:
+
+- `about_project`: `yes | no | mixed`
+- `shareable`: `yes | no | manual_review`
+- `missed_sensitive_data`: `yes | no | maybe`
+- `flagged_parts`
+- `summary`
+
+Review files are stored in:
+
+```text
+.pi/hf-sessions/review/<session>.review.json
+```
+
+Changing provider, model, or thinking level changes the review cache key. The key includes the redacted session hash, context file hashes, provider, model, thinking level, deny-pattern hash, prompt version, and chunk size. If you rerun review with different settings, existing review sidecars for those sessions are replaced.
+
+## What `upload` does
+
+`upload` pushes only sessions that passed deterministic checks, TruffleHog, and LLM review.
+
+It skips sessions that are manually rejected, missing review data, failed review, or already unchanged on the remote dataset.
+
+Use `upload --dry-run` first if you want counts without pushing anything.
+
+## Review before upload
+
+Before uploading, inspect what is currently uploadable:
+
+```bash
+pi-share-hf list --uploadable
+```
+
+Useful checks:
+
+- search the uploadable set with `pi-share-hf grep`
+- review `deny.txt` and rerun `collect` if you discover a new never-publish topic
+- inspect `.pi/hf-sessions/images/` when image preservation is enabled
+- inspect `.pi/hf-sessions/reports/*.trufflehog.json` only if you want to debug or audit why a session was blocked by TruffleHog
+- reject anything suspicious manually with `pi-share-hf reject`
+
+Typical grep checks:
+
+```bash
+pi-share-hf grep -i 'private-project|counterparty|finance|agreement|royalt'
+pi-share-hf grep -i 'gmail|calendar|drive|slack'
+```
 
 ## Commands
 
 ### `init`
 
+Creates `.pi/hf-sessions/`, writes `workspace.json`, and records which project directory maps to which Hugging Face dataset repo.
+
+By default it uses:
+
+- current directory as `--cwd`
+- `.pi/hf-sessions` as `--workspace`
+- preserved embedded images
+
 ```bash
-pi-share-hf init [--cwd /path/to/project] --repo user/dataset [--workspace .pi/hf-sessions] [--no-images]
-pi-share-hf init [--cwd /path/to/project] --repo dataset-name --organization myorg [--workspace .pi/hf-sessions] [--no-images]
+pi-share-hf init --repo user/dataset
+pi-share-hf init --repo dataset-name --organization myorg
 ```
 
-- `--cwd <dir>`: project directory to map to pi session storage (default: current directory)
-- `--repo <id>`: HF dataset repo id (`user/dataset`) or bare repo name when used with `--organization`
-- `--organization <name>`: optional HF organization or user namespace when `--repo` is a bare repo name
-- `--workspace <dir>`: persistent workspace directory (default: `.pi/hf-sessions`)
-- `--no-images`: strip embedded images from redacted output instead of preserving them
+Main options:
+
+- `--cwd <dir>` project directory to map to pi session storage
+- `--repo <id>` HF dataset repo
+- `--organization <name>` optional namespace when `--repo` is a bare name
+- `--workspace <dir>` workspace dir, default `.pi/hf-sessions`
+- `--no-images` strip embedded images from redacted output
 
 ### `collect`
 
+Collects sessions for the configured project, redacts literal secrets, runs TruffleHog on changed redacted files, and runs the LLM review to write or update review sidecars.
+
+By default it uses:
+
+- `.pi/hf-sessions` as `--workspace`
+- `~/.zshrc` as `--env-file`
+- `README.md` and `AGENTS.md` as context files when present
+- current pi settings unless you override provider, model, or thinking
+
 ```bash
-pi-share-hf collect [--workspace .pi/hf-sessions] \
-  --secret secrets.txt --secret "my-token" \
-  --provider openai-codex --model gpt-5.4 --thinking medium \
-  --parallel 4 \
-  --deny deny.txt \
-  README.md AGENTS.md
+pi-share-hf collect [context-files...]
 ```
 
-- `--env-file <path>`: secret source file (default: `~/.zshrc`)
-- `--secret <file>|<text>`: literal secret or secret file (repeatable)
-- `--force`: reprocess all sessions
-- `--provider <name>`: pi provider override for review
-- `--model <id>`: pi model override (supports `provider/model` shorthand)
-- `--thinking <level>`: thinking level override
-- `--parallel <n>`: concurrent LLM reviews (default: 1)
-- `--deny <file>|<regex>`: reject sessions matching this pattern without calling the LLM (repeatable)
-- `--session <file>`: process a single session (for testing)
-- positional args: project context files for relevance judgment (defaults to `README.md` and `AGENTS.md` if present)
+Main options:
 
-`collect` does both deterministic redaction and LLM review. It skips sessions whose `source_hash` matches local workspace or remote manifest. Reprocessing removes stale review sidecars.
-
-Sessions are serialized to plain-text transcripts, chunked, and attached to `pi` via `@file`. Existing review sidecars are reused when redacted hash, context hashes, provider, model, and prompt version all match.
-
-If images are preserved, `collect` extracts them for the review LLM. After review finishes, `workspace/images/` retains only images from sessions with `shareable === "yes"`. Images from sessions marked `shareable === "no"` or `shareable === "manual_review"` are deleted. If your chosen model does not support images, preserved images are not meaningfully reviewed.
-
-Output per session includes:
-- `about_project`: `yes` | `no` | `mixed`
-- `shareable`: `yes` | `no` | `manual_review`
-- `missed_sensitive_data`: `yes` | `no` | `maybe`
-- `flagged_parts`: `[{ reason, evidence }]`
-- `summary`
-
-Enum values:
-
-- `about_project`
-  - `yes`: clearly about the target OSS project
-  - `no`: clearly unrelated to the target OSS project
-  - `mixed`: contains both project-related and unrelated/private content
-- `shareable`
-  - `yes`: fit to publish publicly
-  - `no`: should not be published
-  - `manual_review`: borderline or uncertain, upload should not proceed automatically
-- `missed_sensitive_data`
-  - `no`: no likely missed sensitive data found
-  - `maybe`: possible missed sensitive data, but uncertain
-  - `yes`: likely missed sensitive data found
-
-Review sidecars are JSON files with this shape:
-
-```json
-{
-  "file": "2026-04-04T16-43-06-494Z_aed55f07.jsonl",
-  "context_files": ["/abs/path/to/README.md", "/abs/path/to/AGENTS.md"],
-  "context_hashes": {"/abs/path/to/README.md": "sha256:..."},
-  "provider": "openai-codex",
-  "model": "gpt-5.4",
-  "redacted_hash": "sha256:...",
-  "review_key": "sha256:...",
-  "prompt_version": 4,
-  "chunk_count": 2,
-  "chunk_char_limit": 500000,
-  "chunks": [
-    {
-      "chunk_index": 1,
-      "chunk_file": "/abs/path/to/review-chunks/.../001.txt",
-      "chars": 123456,
-      "result": {
-        "about_project": "yes",
-        "shareable": "manual_review",
-        "missed_sensitive_data": "maybe",
-        "flagged_parts": [{"reason": "...", "evidence": "..."}],
-        "summary": "..."
-      }
-    }
-  ],
-  "aggregate": {
-    "about_project": "yes",
-    "shareable": "manual_review",
-    "missed_sensitive_data": "maybe",
-    "flagged_parts": [{"chunk_index": 1, "reason": "...", "evidence": "..."}],
-    "summary": "..."
-  }
-}
-```
+- `--workspace <dir>` workspace, default `.pi/hf-sessions`
+- `--env-file <path>` secret source file, default `~/.zshrc`
+- `--secret <file>|<text>` repeatable
+- `--force` reprocess all sessions
+- `--provider <name>` review provider override
+- `--model <id>` review model override
+- `--thinking <level>` review thinking override
+- `--parallel <n>` concurrent LLM reviews
+- `--deny <file>|<regex>` reject sessions matching this pattern
+- `--session <file>` process one session only
 
 ### `review`
 
-`review` reruns the LLM step only on already-redacted sessions.
+Reruns only the LLM review step on already-redacted sessions in the workspace.
+
+By default it uses:
+
+- `.pi/hf-sessions` as `--workspace`
+- `README.md` and `AGENTS.md` as context files when present
+- current pi settings unless you override provider, model, or thinking
 
 ```bash
-pi-share-hf review [--workspace .pi/hf-sessions] README.md AGENTS.md
+pi-share-hf review [context-files...]
 ```
 
-It supports the same review-related flags as `collect`: `--provider`, `--model`, `--thinking`, `--parallel`, `--deny`, and `--session`.
+Uses the same review-related flags as `collect`.
 
 ### `reject`
 
-```bash
-pi-share-hf reject [--workspace .pi/hf-sessions] <session.jsonl|image.png>
-```
+Marks a session as never uploadable by adding it to `reject.txt`.
 
-Adds the derived session filename to `workspace/reject.txt`. Upload always skips sessions listed there.
-
-### `upload`
+By default it uses `.pi/hf-sessions` as `--workspace`.
 
 ```bash
-pi-share-hf upload [--workspace .pi/hf-sessions] [--dry-run]
+pi-share-hf reject <session.jsonl|image.png>
 ```
 
-- `--dry-run`: print stats without uploading
+If you pass an extracted image path, the owning session is rejected.
 
-Repo is read from `workspace.json`. Requires review data for every session. Refuses to upload if any session has no review sidecar. Uploads only sessions where `shareable === "yes"`, `missed_sensitive_data === "no"`, and `about_project !== "no"`. Skips unchanged sessions and sessions listed in `reject.txt`.
+### `list`
 
-## Verifying results
+Lists sessions from the workspace.
 
-After `collect` completes, spot-check the results. `list --uploadable` prints the exact session files that would be uploaded. `grep` runs `rg` only against that uploadable set.
+By default it uses `.pi/hf-sessions` as `--workspace`.
 
 ```bash
 pi-share-hf list --uploadable
-pi-share-hf grep 'my-private-project'
-pi-share-hf grep -i 'finance|agreement|royalt'
 ```
 
-If any session containing private content is still uploadable, add a deny pattern and rerun `collect` or `review`, or reject the session explicitly with `pi-share-hf reject`.
+### `grep`
+
+Searches only the currently uploadable sessions.
+
+By default it uses `.pi/hf-sessions` as `--workspace`.
+
+```bash
+pi-share-hf grep -i 'finance|counterparty|private-project'
+```
+
+### `upload`
+
+Uploads the current uploadable sessions and updates the remote dataset manifest.
+
+By default it uses `.pi/hf-sessions` as `--workspace`.
+
+```bash
+pi-share-hf upload --dry-run
+pi-share-hf upload
+```
+
+Uses the built-in TypeScript Hugging Face client. No `huggingface-cli` is needed.
 
 ## Workspace layout
 
@@ -283,37 +381,13 @@ If any session containing private content is still uploadable, add a deny patter
   manifest.local.jsonl
   remote-manifest.jsonl
   manifest.jsonl
-  redacted/       # public, uploaded to HF
-  reports/        # private deterministic findings
-  review/         # private LLM review sidecars
-  review-chunks/  # private transcript chunks
-  images/         # extracted preserved images from sessions with shareable=yes
-  reject.txt      # one rejected session filename per line
+  redacted/       public candidate files
+  reports/        private deterministic + TruffleHog reports
+  review/         private LLM review sidecars
+  review-chunks/  private transcript chunks
+  images/         extracted preserved images for uploadable sessions
+  reject.txt
 ```
-
-Workspaces are incremental. Re-running `collect` or `review` reuses matching outputs.
-
-## Workspace file formats
-
-- `workspace.json`: workspace config
-  ```json
-  {"cwd":"/path/to/project","repo":"user/dataset","noImages":false}
-  ```
-- `manifest.local.jsonl`: one line per locally known session
-  ```json
-  {"file":"2026-04-04T16-43-06-494Z_....jsonl","source_file":"/abs/path/to/session.jsonl","source_hash":"sha256:...","redaction_key":"v1:...","redacted_hash":"sha256:...","entry_count":123,"findings":7,"lines_with_findings":5}
-  ```
-- `remote-manifest.jsonl`: cached copy of the remote dataset manifest
-- `reports/<session>.report.jsonl`: deterministic findings, one line per original JSONL line with findings
-  ```json
-  {"line_number":42,"entry_type":"message","entry_id":"abc123","findings":[{"detector":"literal-secret","severity":"critical","jsonPath":"$.message.content[0].text","replacement":"[REDACTED_SECRET_1]","count":1}]}
-  ```
-- `review/<session>.review.json`: LLM review result for one session
-  ```json
-  {"file":"...jsonl","context_files":["README.md"],"redacted_hash":"sha256:...","review_key":"sha256:...","prompt_version":4,"aggregate":{"about_project":"yes","shareable":"yes","missed_sensitive_data":"no","flagged_parts":[],"summary":"..."}}
-  ```
-- `reject.txt`: one rejected session filename per line
-- `images/`: extracted preserved images. Image filenames encode session file, source line, image index, and content hash prefix.
 
 ## Dataset layout
 
@@ -322,15 +396,11 @@ manifest.jsonl
 <session>.jsonl
 ```
 
-Each `<session>.jsonl` is a redacted pi session. See the [session format docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session.md).
+Each uploaded `*.jsonl` file is a redacted pi session.
 
-`manifest.jsonl` has one entry per session:
+Session format docs:
 
-```json
-{"file": "2026-04-04T16-43-06-494Z_aed55f07.jsonl", "source_hash": "sha256:...", "redaction_key": "v1:...", "redacted_hash": "sha256:..."}
-```
-
-`redaction_key` is a cache key derived from the source hash, image policy, and a hash of the provided secrets. Raw secret values are never written to disk.
+- https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session.md
 
 ## Development
 

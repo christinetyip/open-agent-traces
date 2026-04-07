@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { bold, cyan, green, red, yellow } from "./colors.ts";
-import type { ChunkReviewResult, RemoteManifestEntry, UploadOptions } from "./types.ts";
+import { uploadDatasetFolder } from "./hf.ts";
+import type { ChunkReviewResult, UploadOptions } from "./types.ts";
 import { REJECT_FILE, REMOTE_MANIFEST_CACHE_FILE, REMOTE_MANIFEST_FILE } from "./types.ts";
-import { runCommand, runCommandPassthrough } from "./process.ts";
+import { runCommand } from "./process.ts";
 import { loadReviewFile } from "./review-state.ts";
 import { downloadRemoteManifest, loadLocalManifest, readWorkspaceConfig, workspacePath } from "./workspace.ts";
 
@@ -52,7 +53,7 @@ export async function runUpload(options: UploadOptions): Promise<void> {
       noReview++;
       continue;
     }
-    if (!isUploadApproved(reviewFile.aggregate)) {
+    if (hasReviewErrors(reviewFile) || !isUploadApproved(reviewFile.aggregate)) {
       rejected++;
       continue;
     }
@@ -97,7 +98,7 @@ export async function runUpload(options: UploadOptions): Promise<void> {
   for (const entry of entries) {
     const reviewFile = loadReviewFile(workspacePath(options.workspace, "review", `${entry.file}.review.json`));
     if (rejectedByUser.has(entry.file)) continue;
-    if (!reviewFile || !isUploadApproved(reviewFile.aggregate)) continue;
+    if (!reviewFile || hasReviewErrors(reviewFile) || !isUploadApproved(reviewFile.aggregate)) continue;
 
     const remoteEntry = remoteManifest.get(entry.file);
     if (remoteEntry?.redacted_hash === entry.redacted_hash) continue;
@@ -196,6 +197,10 @@ async function resolveGitOrigin(cwd: string): Promise<string | undefined> {
   return origin.stdout.trim() || undefined;
 }
 
+function hasReviewErrors(reviewFile: { chunks: Array<{ error?: string }> }): boolean {
+  return reviewFile.chunks.some((chunk) => typeof chunk.error === "string" && chunk.error.length > 0);
+}
+
 function isUploadApproved(result: ChunkReviewResult): boolean {
   if (result.shareable !== "yes") return false;
   if (result.missed_sensitive_data !== "no") return false;
@@ -204,17 +209,5 @@ function isUploadApproved(result: ChunkReviewResult): boolean {
 }
 
 async function uploadFolder(repo: string, localDir: string): Promise<void> {
-  const code = await runCommandPassthrough("huggingface-cli", [
-    "upload",
-    repo,
-    localDir,
-    ".",
-    "--repo-type",
-    "dataset",
-    "--commit-message",
-    `pi-share-hf upload ${new Date().toISOString()}`,
-  ]);
-  if (code !== 0) {
-    throw new Error(`Upload failed with exit code ${code}`);
-  }
+  await uploadDatasetFolder(repo, localDir, `pi-share-hf upload ${new Date().toISOString()}`);
 }

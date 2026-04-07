@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { JsonObject, LocalManifestEntry, RemoteManifestEntry, WorkspaceConfig } from "./types.ts";
 import { LOCAL_MANIFEST_FILE, REMOTE_MANIFEST_CACHE_FILE, REMOTE_MANIFEST_FILE, WORKSPACE_CONFIG_FILE } from "./types.ts";
-import { runCommand } from "./process.ts";
+import { downloadDatasetTextFile } from "./hf.ts";
 
 export { LOCAL_MANIFEST_FILE, REMOTE_MANIFEST_CACHE_FILE, REMOTE_MANIFEST_FILE, WORKSPACE_CONFIG_FILE };
 
@@ -137,28 +137,13 @@ export function parseLocalManifestEntry(value: unknown): LocalManifestEntry | un
 
 export async function downloadRemoteManifest(repo: string, outputPath: string): Promise<Map<string, RemoteManifestEntry>> {
   fs.rmSync(outputPath, { force: true });
-  const downloadDir = path.dirname(outputPath);
-  const downloadedPath = path.join(downloadDir, REMOTE_MANIFEST_FILE);
-  fs.rmSync(downloadedPath, { force: true });
-  fs.mkdirSync(downloadDir, { recursive: true });
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-  const result = await runCommand("huggingface-cli", [
-    "download",
-    repo,
-    REMOTE_MANIFEST_FILE,
-    "--repo-type",
-    "dataset",
-    "--local-dir",
-    downloadDir,
-    "--local-dir-use-symlinks",
-    "False",
-    "--quiet",
-  ]);
-
-  if (!result.ok || !fs.existsSync(downloadedPath)) {
+  const manifest = await downloadDatasetTextFile(repo, REMOTE_MANIFEST_FILE);
+  if (!manifest) {
     return new Map();
   }
 
-  fs.copyFileSync(downloadedPath, outputPath);
+  fs.writeFileSync(outputPath, manifest);
   return loadRemoteManifest(outputPath);
 }

@@ -4,7 +4,7 @@ import { red } from "./colors.ts";
 import type { GrepOptions, JsonValue, ListOptions } from "./types.ts";
 import { loadReviewFile } from "./review-state.ts";
 import { REJECT_FILE } from "./types.ts";
-import { isRecord, workspacePath } from "./workspace.ts";
+import { isRecord, loadLocalManifest, workspacePath } from "./workspace.ts";
 
 function loadRejectSet(workspace: string): Set<string> {
   const file = workspacePath(workspace, REJECT_FILE);
@@ -13,16 +13,16 @@ function loadRejectSet(workspace: string): Set<string> {
 }
 
 export function getUploadableSessionPaths(workspace: string): string[] {
-  const reviewDir = workspacePath(workspace, "review");
   const redactedDir = workspacePath(workspace, "redacted");
   const rejectedByUser = loadRejectSet(workspace);
-  if (!fs.existsSync(reviewDir)) return [];
+  const localManifest = loadLocalManifest(workspacePath(workspace, "manifest.local.jsonl"));
+  if (localManifest.size === 0) return [];
 
   const paths: string[] = [];
-  for (const file of fs.readdirSync(reviewDir).filter((f) => f.endsWith(".review.json")).sort()) {
-    const review = loadReviewFile(workspacePath(reviewDir, file));
+  for (const entry of [...localManifest.values()].sort((a, b) => a.file.localeCompare(b.file))) {
+    const sessionFile = entry.file;
+    const review = loadReviewFile(workspacePath(workspace, "review", `${sessionFile}.review.json`));
     if (!review) continue;
-    const sessionFile = review.file;
     if (rejectedByUser.has(sessionFile)) continue;
     const aggregate = review.aggregate;
     if (aggregate.shareable !== "yes") continue;
