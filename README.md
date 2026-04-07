@@ -98,7 +98,19 @@ bash ensue-scripts/status.sh
 bash ensue-scripts/push.sh
 ```
 
-Note: automatic trace capture via hooks is currently only available for Claude Code. For other agents, traces are published manually. The goal is for every agent to also read from the collective during sessions — this requires agent-specific skills/plugins. If you build one, please open a PR.
+**Step 6** — Install the collective intelligence skill so your agent can also **read** from the collective during sessions. How to do this depends on your agent:
+
+| Agent | How to install the skill |
+|-------|------------------------|
+| pi-mono | Copy `SKILL.md` to your pi skills directory |
+| Cline | Add the search instructions from `SKILL.md` to your custom instructions in Cline settings |
+| Continue.dev | Add to your `config.yaml` system message or custom commands |
+| Aider | Add to `.aider.conf.yml` or pass via `--system-prompt` |
+| Codex | Add to your system instructions or `AGENTS.md` |
+
+The key part to include from `SKILL.md` is the **API** section — it tells your agent how to search the collective using `ensue-scripts/ensue-collective.sh` and when to search (debugging, configuring, stuck). Without this, your agent can write traces but won't know to search the collective when it could help.
+
+Note: automatic trace capture via hooks is currently only available for Claude Code. For other agents, traces are published manually via collect/push. If you build a deeper integration (hooks, automatic capture) for your agent, please open a PR.
 
 ---
 
