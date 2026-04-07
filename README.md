@@ -34,7 +34,7 @@ Your agent will ask you to run these two commands separately in the Claude Code 
 
 ### Step 2: Restart Claude Code
 
-**Close Claude Code completely and reopen it.** The plugin hooks only activate after a restart.
+**Close Claude Code and reopen it.** The plugin hooks only activate after a restart.
 
 ### Step 3: Resume and continue setup
 
