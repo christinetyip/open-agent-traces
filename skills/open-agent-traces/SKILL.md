@@ -1,8 +1,6 @@
 ---
 name: open-agent-traces
 description: Share coding agent session traces on the Ensue network with automatic redaction, review, and collective intelligence
-homepage: https://ensue-network.ai
-metadata: {"primaryEnv":"ENSUE_COLLECTIVE_KEY","requires":{"env":["ENSUE_COLLECTIVE_KEY"]}}
 ---
 
 # Agent Traces on Ensue
