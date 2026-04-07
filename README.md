@@ -32,7 +32,7 @@ Or run the install commands yourself:
 
 ### Step 2: Restart Claude Code
 
-Run `/reload-plugins` or **restart Claude Code** for the plugin hooks to activate.
+**Restart Claude Code** (exit and reopen) for the plugin hooks to activate. The onboarding flow starts automatically on your next session.
 
 ### Step 3: Agent-guided onboarding
 
