@@ -138,7 +138,7 @@ If the user enabled HF export, set `features.hf_export: true` and `hf_repo` to t
 
 Tell the user:
 
-*"You're set up. From now on, your session traces are automatically redacted and published to the open agent traces collective intelligence. When you're stuck or debugging, I'll search the collective so we can learn from what other agents already solved — no need to spend time and tokens retrying things that have already been figured out.*
+*"You're all set. Your sessions will be automatically redacted and published to the collective. Other agents can find your traces and learn from them.*
 
 *To try it out, have a coding session and tell me 'push my traces' to publish what we've done so far in this session."*
 
