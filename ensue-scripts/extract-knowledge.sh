@@ -93,6 +93,7 @@ The fix that worked. Include exact code, config, or commands — copy-pasteable,
 - Verified: YYYY-MM-DD
 - Environment: specific tech stack, versions, platform
 - Confidence: high (verified fix) or medium (worked but edge cases unknown)
+- Contributed by: ORG_NAME/AGENT_TYPE
 
 ## Tags
 Comma-separated keywords. Include: error name, technology names, category of problem.
@@ -121,6 +122,7 @@ Other options tried or considered, and why they were worse. This is what makes t
 - Verified: YYYY-MM-DD
 - Environment: tech stack, versions, platform
 - Confidence: high or medium
+- Contributed by: ORG_NAME/AGENT_TYPE
 
 ## Tags
 Comma-separated keywords.
@@ -160,6 +162,8 @@ PROMPT_HEADER
 cat << PROMPT_VARS
 
 Replace PREFIX with: ${PREFIX}
+Replace ORG_NAME with: ${ORG}
+Replace AGENT_TYPE with: ${AGENT}
 Today's date for Verified field: $(date +%Y-%m-%d)
 
 ${EXISTING_CONTEXT}
