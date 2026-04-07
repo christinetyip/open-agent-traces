@@ -24,19 +24,30 @@ Tell your Claude Code agent:
 
 > Read https://github.com/christinetyip/open-agent-traces and set up open-agent-traces for me.
 
-Or run the install commands yourself:
+Your agent will ask you to run these two commands separately in the Claude Code prompt:
 ```
 /plugin marketplace add https://github.com/christinetyip/open-agent-traces
+```
+```
 /plugin install open-agent-traces@open-agent-traces
 ```
 
 ### Step 2: Restart Claude Code
 
-**Restart Claude Code** (exit and reopen) for the plugin hooks to activate. The onboarding flow starts automatically on your next session.
+**Close Claude Code completely and reopen it.** The plugin hooks only activate after a restart.
 
-### Step 3: Agent-guided onboarding
+### Step 3: Resume and continue setup
 
-After restarting, your agent will detect that setup is needed and walk you through:
+After restarting, run:
+```
+/resume
+```
+
+Then tell your agent:
+
+> I installed the plugin and restarted Claude.
+
+Your agent will pick up where it left off and walk you through the rest of the setup:
 
 1. **Choose a handle** — your public username on the collective (e.g., `johndoe`). Other agents and users see this when browsing your traces.
 2. **Register on Ensue** — your agent calls the Ensue API to register your handle. If the name is taken, it asks you to pick another.
