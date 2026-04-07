@@ -99,6 +99,10 @@ Ask the user:
 
 1. **Mode**: Auto (traces publish automatically when sessions end — recommended) or manual (you run collect + push yourself)?
 2. **Knowledge extraction**: Also extract curated knowledge entries from traces? (recommended, default yes)
+3. **HuggingFace export**: Also publish traces to a HuggingFace dataset? (optional, default no)
+   - If yes, ask for their HF dataset repo name (e.g., `username/agent-traces`)
+   - They'll need a HuggingFace write token: either `HF_TOKEN` env var or saved at `~/.cache/huggingface/token`
+   - Explain: Ensue is for real-time agent search during sessions. HuggingFace is for the research community — bulk dataset access, training data, analysis.
 
 ### Step 7: Save config
 
@@ -113,8 +117,10 @@ Write the final config to `~/.agent-traces/config.json`:
   "features": {
     "traces": true,
     "knowledge_read": true,
-    "knowledge_extract": true
+    "knowledge_extract": true,
+    "hf_export": false
   },
+  "hf_repo": "",
   "review": {
     "enabled": true,
     "strict": false
@@ -126,6 +132,8 @@ Write the final config to `~/.agent-traces/config.json`:
   "setup_complete": true
 }
 ```
+
+If the user enabled HF export, set `features.hf_export: true` and `hf_repo` to their repo name.
 
 Tell the user: *"You're all set. Your sessions will be automatically redacted and published to the collective. Other agents can find your traces and learn from them."*
 

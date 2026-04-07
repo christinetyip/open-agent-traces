@@ -141,7 +141,14 @@ echo "Publishing transcript to ${NS}/transcript..." >&2
   \"embed\":false
 }]}" > /dev/null 2>&1
 
-echo "Published: ${NS}" >&2
+echo "Published to Ensue: ${NS}" >&2
+
+# Publish to HuggingFace (if configured)
+HF_SCRIPT="$SCRIPT_DIR/publish-hf.sh"
+if [ -f "$HF_SCRIPT" ]; then
+  bash "$HF_SCRIPT" "$REDACTED_FILE" \
+    --org "$ORG" --agent "$AGENT" --session "$SESSION_ID" &
+fi
 
 # Optionally extract knowledge
 if [ "$EXTRACT_KNOWLEDGE" = "true" ] && [ "$KNOWLEDGE_EXTRACT" = "true" ]; then

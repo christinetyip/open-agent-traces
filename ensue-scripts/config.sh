@@ -22,6 +22,9 @@ if [ -f "$CONFIG_FILE" ]; then
   : "${KNOWLEDGE_READ:=$(_cfg '.features.knowledge_read // "true"')}"
   : "${KNOWLEDGE_EXTRACT:=$(_cfg '.features.knowledge_extract // "true"')}"
 
+  : "${HF_REPO:=$(_cfg '.hf_repo // empty')}"
+  : "${HF_ENABLED:=$(_cfg '.features.hf_export // "false"')}"
+
   SETUP_COMPLETE=$(_cfg '.setup_complete // "false"')
   DEFAULT_AGENT=$(_cfg '.default_agent // "claude-code"')
 fi
@@ -40,5 +43,7 @@ fi
 : "${TRACES_ENABLED:=true}"
 : "${KNOWLEDGE_READ:=true}"
 : "${KNOWLEDGE_EXTRACT:=true}"
+: "${HF_ENABLED:=false}"
+: "${HF_REPO:=}"
 : "${SETUP_COMPLETE:=false}"
 : "${DEFAULT_AGENT:=claude-code}"

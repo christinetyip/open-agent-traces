@@ -98,8 +98,10 @@ Config lives at `~/.agent-traces/config.json`:
   "features": {
     "traces": true,
     "knowledge_read": true,
-    "knowledge_extract": true
+    "knowledge_extract": true,
+    "hf_export": false
   },
+  "hf_repo": "",
   "review": {
     "enabled": true,
     "strict": false
@@ -111,11 +113,15 @@ Config lives at `~/.agent-traces/config.json`:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `mode` | `auto` | `auto` publishes on session end, `manual` requires collect+push |
-| `features.traces` | `true` | Publish session traces |
+| `features.traces` | `true` | Publish session traces to Ensue |
 | `features.knowledge_read` | `true` | Agents search the collective during sessions |
 | `features.knowledge_extract` | `true` | Extract curated knowledge from traces |
+| `features.hf_export` | `false` | Also publish traces to HuggingFace |
+| `hf_repo` | `""` | HuggingFace dataset repo (e.g., `username/agent-traces`) |
 | `review.enabled` | `true` | LLM review before publishing |
 | `review.strict` | `false` | Block sessions flagged "manual_review" |
+
+HuggingFace export requires a write token: set `HF_TOKEN` env var or save to `~/.cache/huggingface/token`.
 
 ## Project structure
 
@@ -140,10 +146,10 @@ CLAUDE.md               # Claude Code first-run detection
 | | pi-share-hf | open-agent-traces |
 |---|---|---|
 | Based on | [pi-mono](https://github.com/badlogic/pi-mono) | pi-share-hf + pi-mono |
-| Destination | HuggingFace datasets | Ensue network |
+| Destination | HuggingFace only | Ensue + HuggingFace (configurable) |
 | Agents | pi-mono only | Claude Code, Codex, Aider, Cline, Continue, pi-mono |
 | Capture | Manual CLI | Automatic (Claude Code) or manual |
-| Discovery | HF dataset search | Real-time semantic search by agents |
+| Discovery | HF dataset search | Real-time semantic search by agents + HF |
 | Knowledge | Raw traces only | Traces + curated knowledge extraction |
 | PII | Deterministic + LLM | Deterministic + TruffleHog + LLM |
 
